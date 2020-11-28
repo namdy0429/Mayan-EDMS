@@ -27,6 +27,8 @@ from mayan.apps.events.links import (
     link_events_for_object, link_object_event_types_user_subcriptions_list,
 )
 from mayan.apps.events.permissions import permission_events_view
+from mayan.apps.file_caching.links import link_cache_partition_purge
+from mayan.apps.file_caching.permissions import permission_cache_partition_purge
 from mayan.apps.navigation.classes import SourceColumn
 from mayan.apps.rest_api.fields import DynamicSerializerField
 from mayan.apps.templating.classes import AJAXTemplate
@@ -39,12 +41,17 @@ from .dashboard_widgets import (
     DashboardWidgetDocumentsTypesTotal,
 )
 from .events import (
-    event_document_create, event_document_file_deleted,
-    event_document_file_downloaded, event_document_file_new,
-    event_document_properties_edit, event_document_type_changed,
-    event_document_type_created, event_document_type_edited,
+    event_document_created, event_document_file_created,
+    event_document_file_deleted, event_document_file_downloaded,
+    event_document_file_edited, event_document_edited,
+    event_document_type_changed, event_document_type_edited,
+    event_document_type_quick_label_created,
+    event_document_type_quick_label_deleted,
+    event_document_type_quick_label_edited,
     event_document_version_created, event_document_version_deleted,
-    event_document_version_edited, event_document_viewed
+    event_document_version_edited, event_document_version_page_created,
+    event_document_version_page_deleted, event_document_version_page_edited,
+    event_document_viewed
 )
 from .handlers import (
     handler_create_default_document_type,
@@ -54,17 +61,16 @@ from .handlers import (
 )
 from .links.document_links import (
     link_document_type_change, link_document_properties_edit,
-    link_document_list, link_document_list_recent_access,
-    link_document_list_recent_added, link_document_multiple_type_change,
+    link_document_list, link_document_recently_accessed_list,
+    link_document_recently_created_list, link_document_multiple_type_change,
     link_document_preview, link_document_properties
 )
 from .links.document_file_links import (
-    link_document_file_cache_purge, link_document_file_delete,
-    link_document_file_download_quick, link_document_file_edit,
-    link_document_file_list, link_document_file_preview,
-    link_document_file_print_form, link_document_file_properties,
-    link_document_file_return_to_document, link_document_file_return_list,
-    link_document_file_transformations_clear,
+    link_document_file_delete, link_document_file_download_quick,
+    link_document_file_edit, link_document_file_list,
+    link_document_file_preview, link_document_file_print_form,
+    link_document_file_properties, link_document_file_return_to_document,
+    link_document_file_return_list, link_document_file_transformations_clear,
     link_document_file_multiple_transformations_clear,
     link_document_file_transformations_clone
 )
@@ -91,11 +97,10 @@ from .links.document_type_links import (
     link_document_type_setup
 )
 from .links.document_version_links import (
-    link_document_version_active, link_document_version_cache_purge,
-    link_document_version_create, link_document_version_delete,
-    link_document_version_edit, link_document_version_export,
-    link_document_version_list, link_document_version_multiple_delete,
-    link_document_version_return_list,
+    link_document_version_active, link_document_version_create,
+    link_document_version_delete, link_document_version_edit,
+    link_document_version_export, link_document_version_list,
+    link_document_version_multiple_delete, link_document_version_return_list,
     link_document_version_return_to_document, link_document_version_preview,
     link_document_version_print_form,
     link_document_version_transformations_clear,
@@ -193,16 +198,38 @@ class DocumentsApp(MayanAppConfig):
     def ready(self):
         super().ready()
 
-        TrashedDocument = self.get_model(model_name='TrashedDocument')
         Document = self.get_model(model_name='Document')
+        DocumentSearchResult = self.get_model(
+            model_name='DocumentSearchResult'
+        )
         DocumentFile = self.get_model(model_name='DocumentFile')
         DocumentFilePage = self.get_model(model_name='DocumentFilePage')
-        DocumentFilePageResult = self.get_model(model_name='DocumentFilePageResult')
+        DocumentFileSearchResult = self.get_model(
+            model_name='DocumentFileSearchResult'
+        )
         DocumentType = self.get_model(model_name='DocumentType')
-        DocumentTypeFilename = self.get_model(model_name='DocumentTypeFilename')
+        DocumentTypeFilename = self.get_model(
+            model_name='DocumentTypeFilename'
+        )
         DocumentVersion = self.get_model(model_name='DocumentVersion')
+        DocumentVersionSearchResult = self.get_model(
+            model_name='DocumentVersionSearchResult'
+        )
         DocumentVersionPage = self.get_model(model_name='DocumentVersionPage')
+        DocumentVersionPageSearchResult = self.get_model(
+            model_name='DocumentVersionPageSearchResult'
+        )
         DuplicatedDocument = self.get_model(model_name='DuplicatedDocument')
+        FavoriteDocument = self.get_model(
+            model_name='FavoriteDocument'
+        )
+        RecentlyAccessedDocument = self.get_model(
+            model_name='RecentlyAccessedDocument'
+        )
+        RecentlyCreatedDocument = self.get_model(
+            model_name='RecentlyCreatedDocument'
+        )
+        TrashedDocument = self.get_model(model_name='TrashedDocument')
 
         AJAXTemplate(
             name='invalid_document',
@@ -219,12 +246,14 @@ class DocumentsApp(MayanAppConfig):
             serializer_class='mayan.apps.documents.serializers.document_serializers.DocumentSerializer'
         )
 
-        EventModelRegistry.register(model=TrashedDocument)
         EventModelRegistry.register(model=Document)
         EventModelRegistry.register(model=DocumentFile)
+        EventModelRegistry.register(model=DocumentFilePage)
         EventModelRegistry.register(model=DocumentType)
+        EventModelRegistry.register(model=DocumentTypeFilename)
         EventModelRegistry.register(model=DocumentVersion)
         EventModelRegistry.register(model=DocumentVersionPage)
+        EventModelRegistry.register(model=TrashedDocument)
 
         MissingItem(
             label=_('Create a document type'),
@@ -265,37 +294,46 @@ class DocumentsApp(MayanAppConfig):
 
         ModelEventType.register(
             model=Document, event_types=(
-                event_document_properties_edit, event_document_type_changed,
+                event_document_edited, event_document_type_changed,
                 event_document_file_deleted, event_document_version_deleted,
                 event_document_viewed
             )
         )
         ModelEventType.register(
             model=DocumentFile, event_types=(
-                event_document_file_downloaded, event_document_file_new
+                event_document_file_created, event_document_file_downloaded,
+                event_document_file_edited
             )
         )
         ModelEventType.register(
             model=DocumentType, event_types=(
-                event_document_create,
-                event_document_type_created,
+                event_document_created,
                 event_document_type_edited,
+                event_document_type_quick_label_created
+            )
+        )
+        ModelEventType.register(
+            model=DocumentTypeFilename, event_types=(
+                event_document_type_quick_label_deleted,
+                event_document_type_quick_label_edited
             )
         )
         ModelEventType.register(
             model=DocumentVersion, event_types=(
                 event_document_version_created,
-                event_document_version_edited
+                event_document_version_edited,
+                event_document_version_page_created
             )
         )
         ModelEventType.register(
             model=DocumentVersionPage, event_types=(
-                event_document_version_edited,
+                event_document_version_page_deleted,
+                event_document_version_page_edited
             )
         )
 
         ModelField(model=Document, name='description')
-        ModelField(model=Document, name='date_added')
+        ModelField(model=Document, name='datetime_created')
         ModelField(model=Document, name='trashed_date_time')
         ModelField(
             model=Document, name='document_type'
@@ -348,17 +386,19 @@ class DocumentsApp(MayanAppConfig):
         ModelPermission.register(
             model=Document, permissions=(
                 permission_acl_edit, permission_acl_view,
-                permission_trashed_document_delete, permission_document_edit,
-                permission_document_file_new,
+                permission_document_edit, permission_document_file_new,
                 permission_document_properties_edit,
-                permission_trashed_document_restore, permission_document_tools,
+                permission_document_tools,
                 permission_document_trash, permission_document_view,
                 permission_document_version_create, permission_events_view,
+                permission_trashed_document_delete,
+                permission_trashed_document_restore,
             )
         )
         ModelPermission.register(
             model=DocumentFile, permissions=(
                 permission_acl_edit, permission_acl_view,
+                permission_cache_partition_purge,
                 permission_document_file_delete,
                 permission_document_file_download,
                 permission_document_file_edit,
@@ -382,6 +422,7 @@ class DocumentsApp(MayanAppConfig):
         ModelPermission.register(
             model=DocumentVersion, permissions=(
                 permission_acl_edit, permission_acl_view,
+                permission_cache_partition_purge,
                 permission_document_version_delete,
                 permission_document_version_edit,
                 permission_document_version_export,
@@ -401,19 +442,22 @@ class DocumentsApp(MayanAppConfig):
             model=DocumentFile, related='document',
         )
         ModelPermission.register_inheritance(
-            model=DocumentFilePage, related='document_file__document',
-        )
-        ModelPermission.register_inheritance(
-            model=DocumentFilePageResult, related='document_file__document',
+            model=DocumentFilePage, related='document_file',
         )
         ModelPermission.register_inheritance(
             model=DocumentVersion, related='document',
         )
         ModelPermission.register_inheritance(
-            model=DocumentVersionPage, related='document_version__document',
+            model=RecentlyAccessedDocument, related='document',
+        )
+        ModelPermission.register_inheritance(
+            model=DocumentVersionPage, related='document_version',
         )
         ModelPermission.register_inheritance(
             model=DocumentTypeFilename, related='document_type',
+        )
+        ModelPermission.register_inheritance(
+            model=FavoriteDocument, related='document',
         )
 
         model_query_fields_document = ModelQueryFields(model=Document)
@@ -490,15 +534,19 @@ class DocumentsApp(MayanAppConfig):
                 document=context['object']
             ), label=_('Pages'), source=Document
         )
-        SourceColumn(
-            attribute='date_added', include_label=True, is_sortable=True,
-            source=Document, views=('documents:document_list_recent_added',)
-        )
+
         SourceColumn(
             func=lambda context: DuplicatedDocument.objects.get(
                 document=context['object']
             ).documents.count(), include_label=True, label=_('Duplicates'),
             source=Document, views=('documents:duplicated_document_list',)
+        )
+
+        # RecentlyCreatedDocument
+
+        SourceColumn(
+            attribute='datetime_created', include_label=True,
+            is_sortable=True, source=RecentlyCreatedDocument
         )
 
         # DocumentFile
@@ -531,7 +579,7 @@ class DocumentsApp(MayanAppConfig):
         # DocumentFilePage
 
         SourceColumn(
-            attribute='get_page_number_display', is_identifier=True,
+            attribute='get_label', is_identifier=True,
             is_object_absolute_url=True, source=DocumentFilePage,
         )
         SourceColumn(
@@ -539,23 +587,6 @@ class DocumentsApp(MayanAppConfig):
                 instance=context['object']
             ), html_extra_classes='text-center document-thumbnail-list',
             label=_('Thumbnail'), source=DocumentFilePage
-        )
-
-        # DocumentFilePageResult
-
-        SourceColumn(
-            attribute='get_label', is_identifier=True,
-            is_object_absolute_url=True, source=DocumentFilePageResult
-        )
-        SourceColumn(
-            func=lambda context: thumbnail_widget.render(
-                instance=context['object']
-            ), html_extra_classes='text-center document-thumbnail-list',
-            label=_('Thumbnail'), source=DocumentFilePageResult
-        )
-        SourceColumn(
-            attribute='document_file.document.document_type',
-            label=_('Type'), source=DocumentFilePageResult
         )
 
         # DocumentType
@@ -583,11 +614,10 @@ class DocumentsApp(MayanAppConfig):
         # DocumentVersion
 
         SourceColumn(
-            source=DocumentVersion, attribute='timestamp', is_identifier=True,
+            source=DocumentVersion, attribute='get_label', is_identifier=True,
             is_object_absolute_url=True
         )
         SourceColumn(
-            #func=lambda context: document_version_page_thumbnail_widget.render(
             func=lambda context: thumbnail_widget.render(
                 instance=context['object']
             ), html_extra_classes='text-center document-thumbnail-list',
@@ -610,31 +640,15 @@ class DocumentsApp(MayanAppConfig):
         # DocumentVersionPage
 
         SourceColumn(
-            attribute='get_page_number_display', is_identifier=True,
+            attribute='get_label', is_identifier=True,
             is_object_absolute_url=True, source=DocumentVersionPage,
         )
         SourceColumn(
-            #func=lambda context: document_version_page_thumbnail_widget.render(
             func=lambda context: thumbnail_widget.render(
                 instance=context['object']
             ), html_extra_classes='text-center document-thumbnail-list',
             label=_('Thumbnail'), source=DocumentVersionPage
         )
-
-        #SourceColumn(
-        #    attribute='get_label', is_identifier=True,
-        #    is_object_absolute_url=True, source=DocumentVersionPageResult
-        #)
-        #SourceColumn(
-        #    func=lambda context: document_version_page_thumbnail_widget.render(
-        #        instance=context['object']
-        #    ), html_extra_classes='text-center document-thumbnail-list',
-        #    label=_('Thumbnail'), source=DocumentVersionPageResult
-        #)
-        #SourceColumn(
-        #    attribute='document_version.document.document_type',
-        #    label=_('Type'), source=DocumentVersionPageResult
-        #)
 
         # TrashedDocument
 
@@ -668,8 +682,8 @@ class DocumentsApp(MayanAppConfig):
 
         menu_documents.bind_links(
             links=(
-                link_document_list_recent_access,
-                link_document_list_recent_added, link_document_list_favorites,
+                link_document_recently_accessed_list,
+                link_document_recently_created_list, link_document_list_favorites,
                 link_document_list, link_document_list_deleted,
                 link_duplicated_document_list,
             )
@@ -716,7 +730,7 @@ class DocumentsApp(MayanAppConfig):
                 link_document_multiple_favorites_remove,
                 link_document_multiple_trash,
                 link_document_multiple_type_change
-            ), sources=(Document,)
+            ), sources=(Document, DocumentSearchResult)
         )
 
         menu_secondary.bind_links(
@@ -739,16 +753,14 @@ class DocumentsApp(MayanAppConfig):
         )
         menu_multi_item.bind_links(
             links=(
-                #link_document_file_multiple_download,
                 link_document_file_multiple_page_count_update,
                 link_document_file_multiple_transformations_clear,
-            ), sources=(DocumentFile,)
+            ), sources=(DocumentFile, DocumentFileSearchResult)
         )
         menu_object.bind_links(
             links=(
-                link_document_file_cache_purge,
+                link_cache_partition_purge,
                 link_document_file_delete,
-                #link_document_file_download,
                 link_document_file_download_quick,
                 link_document_file_edit,
                 link_document_file_page_count_update,
@@ -855,12 +867,12 @@ class DocumentsApp(MayanAppConfig):
             links=(
                 link_document_version_multiple_delete,
                 link_document_version_multiple_transformations_clear,
-            ), sources=(DocumentVersion,)
+            ), sources=(DocumentVersion, DocumentVersionSearchResult)
         )
         menu_object.bind_links(
             links=(
                 link_document_version_active,
-                link_document_version_cache_purge,
+                link_cache_partition_purge,
                 link_document_version_delete, link_document_version_edit,
                 link_document_version_export,
                 link_document_version_page_list_remap,
@@ -903,12 +915,12 @@ class DocumentsApp(MayanAppConfig):
         menu_list_facet.bind_links(
             links=(
                 link_decorations_list, link_transformation_list,
-            ), sources=(DocumentVersionPage,)
+            ), sources=(DocumentVersionPage, DocumentVersionPageSearchResult)
         )
         menu_object.bind_links(
             links=(
                 link_document_version_page_delete,
-            ), sources=(DocumentVersionPage,)
+            ), sources=(DocumentVersionPage, DocumentVersionPageSearchResult)
         )
         menu_return.bind_links(
             links=(

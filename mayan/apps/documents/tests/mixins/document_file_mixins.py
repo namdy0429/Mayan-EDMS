@@ -1,20 +1,30 @@
 import time
 
+from django.db.models import Q
+
 from mayan.apps.converter.layers import layer_saved_transformations
 
 from ...literals import PAGE_RANGE_ALL
+from ...models.document_file_models import DocumentFile
 
 from ..literals import (
     TEST_DOCUMENT_FILE_COMMENT, TEST_DOCUMENT_FILE_COMMENT_EDITED,
-    TEST_DOCUMENT_FILE_FILENAME_EDITED, TEST_DOCUMENT_PATH,
-    TEST_SMALL_DOCUMENT_PATH, TEST_TRANSFORMATION_ARGUMENT,
-    TEST_TRANSFORMATION_CLASS
+    TEST_DOCUMENT_FILE_FILENAME_EDITED, TEST_SMALL_DOCUMENT_PATH,
+    TEST_TRANSFORMATION_ARGUMENT, TEST_TRANSFORMATION_CLASS
 )
 
 
 class DocumentFileAPIViewTestMixin:
     def _request_test_document_file_delete_api_view(self):
         return self.delete(
+            viewname='rest_api:documentfile-detail', kwargs={
+                'document_id': self.test_document.pk,
+                'document_file_id': self.test_document.file_latest.pk
+            }
+        )
+
+    def _request_test_document_file_detail_api_view(self):
+        return self.get(
             viewname='rest_api:documentfile-detail', kwargs={
                 'document_id': self.test_document.pk,
                 'document_file_id': self.test_document.file_latest.pk
@@ -42,14 +52,25 @@ class DocumentFileAPIViewTestMixin:
         # is the latest.
         time.sleep(1)
 
-        with open(file=TEST_DOCUMENT_PATH, mode='rb') as file_descriptor:
-            return self.post(
+        pk_list = list(DocumentFile.objects.values_list('pk', flat=True))
+
+        with open(file=TEST_SMALL_DOCUMENT_PATH, mode='rb') as file_descriptor:
+            response = self.post(
                 viewname='rest_api:documentfile-list', kwargs={
                     'document_id': self.test_document.pk,
                 }, data={
-                    'comment': '', 'file': file_descriptor,
+                    'comment': '', 'file_new': file_descriptor,
                 }
             )
+
+        try:
+            self.test_document_file = DocumentFile.objects.get(
+                ~Q(pk__in=pk_list)
+            )
+        except DocumentFile.DoesNotExist:
+            self.test_document_file = None
+
+        return response
 
 
 class DocumentFileTestMixin:
@@ -120,13 +141,29 @@ class DocumentFileViewTestMixin:
 
 
 class DocumentFilePageAPIViewTestMixin:
+    def _request_test_document_file_page_detail_api_view(self):
+        return self.get(
+            viewname='rest_api:documentfilepage-detail', kwargs={
+                'document_id': self.test_document.pk,
+                'document_file_id': self.test_document_file.pk,
+                'document_file_page_id': self.test_document_file_page.pk
+            }
+        )
+
     def _request_test_document_file_page_image_api_view(self):
-        page = self.test_document_file.pages.first()
         return self.get(
             viewname='rest_api:documentfilepage-image', kwargs={
-                'document_id': page.document_file.document_id,
-                'document_file_id': page.document_file_id,
-                'document_file_page_id': page.pk
+                'document_id': self.test_document.pk,
+                'document_file_id': self.test_document_file.pk,
+                'document_file_page_id': self.test_document_file_page.pk
+            }
+        )
+
+    def _request_test_document_file_page_list_api_view(self):
+        return self.get(
+            viewname='rest_api:documentfilepage-list', kwargs={
+                'document_id': self.test_document.pk,
+                'document_file_id': self.test_document_file.pk,
             }
         )
 

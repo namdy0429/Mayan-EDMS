@@ -13,14 +13,18 @@ from mayan.apps.common.classes import ModelQueryFields
 from mayan.apps.common.mixins import ModelInstanceExtraDataAPIViewMixin
 from mayan.apps.common.signals import signal_mayan_pre_save
 from mayan.apps.converter.classes import ConverterBase
-from mayan.apps.converter.exceptions import InvalidOfficeFormat, PageCountError
+from mayan.apps.converter.exceptions import (
+    InvalidOfficeFormat, PageCountError
+)
 from mayan.apps.events.classes import EventManagerMethodAfter
 from mayan.apps.events.decorators import method_event
 from mayan.apps.mimetype.api import get_mimetype
 from mayan.apps.storage.classes import DefinedStorageLazy
-from mayan.apps.templating.classes import Template
 
-from ..events import event_document_file_deleted, event_document_file_new
+from ..events import (
+    event_document_file_created, event_document_file_deleted,
+    event_document_file_downloaded, event_document_file_edited
+)
 from ..literals import (
     STORAGE_NAME_DOCUMENT_FILE_PAGE_IMAGE_CACHE, STORAGE_NAME_DOCUMENT_FILES
 )
@@ -31,7 +35,7 @@ from ..signals import signal_post_document_created, signal_post_document_file_up
 from .document_models import Document
 from .mixins import ModelMixinHooks
 
-__all__ = ('DocumentFile',)
+__all__ = ('DocumentFile', 'DocumentFileSearchResult')
 logger = logging.getLogger(name=__name__)
 
 
@@ -84,7 +88,7 @@ class DocumentFile(
         upload_to=upload_to, verbose_name=_('File')
     )
     filename = models.CharField(
-        max_length=255, verbose_name=_('Filename')
+        blank=True, max_length=255, verbose_name=_('Filename')
     )
     mimetype = models.CharField(
         blank=True, editable=False, help_text=_(
@@ -154,7 +158,7 @@ class DocumentFile(
         )
 
     def __str__(self):
-        return self.get_rendered_string()
+        return self.get_label()
 
     @cached_property
     def cache(self):
@@ -251,6 +255,23 @@ class DocumentFile(
         if first_page:
             return first_page.get_api_image_url(*args, **kwargs)
 
+    def get_cache_partitions(self):
+        result = [self.cache_partition]
+        for page in self.file_pages.all():
+            result.append(page.cache_partition)
+
+        return result
+
+    @method_event(
+        event_manager_class=EventManagerMethodAfter,
+        event=event_document_file_downloaded,
+        target='self',
+    )
+    def get_download_file_object(self):
+        # Thin wrapper to make sure the normal views and API views trigger
+        # then download event in the same way.
+        return self.open()
+
     def get_intermediate_file(self):
         cache_filename = 'intermediate_file'
         cache_file = self.cache_partition.get_file(filename=cache_filename)
@@ -284,10 +305,9 @@ class DocumentFile(
                     cache_file.delete()
                 raise
 
-    def get_rendered_string(self):
-        return Template(
-            template_string='{{ instance.document }} - {{ instance.filename }}'
-        ).render(context={'instance': self})
+    def get_label(self):
+        return self.filename
+    get_label.short_description = _('Label')
 
     def mimetype_update(self, save=True):
         """
@@ -379,7 +399,7 @@ class DocumentFile(
     def save(self, *args, **kwargs):
         """
         Overloaded save method that updates the document file's checksum,
-        mimetype, and page count when created
+        mimetype, and page count when created.
         """
         user = kwargs.pop('_user', self.__dict__.pop('_event_actor', None))
         new_document_file = not self.pk
@@ -411,6 +431,9 @@ class DocumentFile(
 
                 if new_document_file:
                     # Only do this for new documents
+                    event_document_file_created.commit(
+                        actor=user, target=self, action_object=self.document
+                    )
                     self.checksum_update(save=False)
                     self.mimetype_update(save=False)
                     self.save()
@@ -427,6 +450,10 @@ class DocumentFile(
 
                     self.document._event_ignore = True
                     self.document.save()
+                else:
+                    event_document_file_edited.commit(
+                        actor=user, target=self, action_object=self.document
+                    )
         except Exception as exception:
             logger.error(
                 'Error creating new document file for document "%s"; %s',
@@ -435,9 +462,6 @@ class DocumentFile(
             raise
         else:
             if new_document_file:
-                event_document_file_new.commit(
-                    actor=user, target=self, action_object=self.document
-                )
                 signal_post_document_file_upload.send(
                     sender=DocumentFile, instance=self
                 )
@@ -466,3 +490,8 @@ class DocumentFile(
     def uuid(self):
         # Make cache UUID a mix of document UUID, file ID
         return '{}-{}'.format(self.document.uuid, self.pk)
+
+
+class DocumentFileSearchResult(DocumentFile):
+    class Meta:
+        proxy = True

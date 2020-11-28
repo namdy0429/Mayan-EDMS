@@ -1,55 +1,24 @@
 import logging
 
 from rest_framework import status
+from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 
 from mayan.apps.acls.models import AccessControlList
 from mayan.apps.rest_api import generics
 
-from ..models.document_models import Document, TrashedDocument
+from ..models.document_models import Document
 from ..models.document_type_models import DocumentType
-from ..models.misc_models import RecentDocument
 from ..permissions import (
     permission_document_create, permission_document_properties_edit,
-    permission_document_trash, permission_document_view,
-    permission_trashed_document_delete, permission_trashed_document_restore
+    permission_document_trash, permission_document_view
 )
 from ..serializers.document_serializers import (
-    DocumentSerializer, DocumentCreateSerializer,
-    DocumentTypeChangeSerializer, DocumentWritableSerializer,
-    RecentDocumentSerializer, TrashedDocumentSerializer
+    DocumentSerializer, DocumentChangeTypeSerializer,
+    DocumentUploadSerializer
 )
 
 logger = logging.getLogger(name=__name__)
-
-
-class APIDocumentListView(generics.ListCreateAPIView):
-    """
-    get: Returns a list of all the documents.
-    post: Create a new document.
-    """
-    mayan_object_permissions = {
-        'GET': (permission_document_view,),
-    }
-    queryset = Document.objects.all()
-
-    def get_serializer_class(self):
-        if self.request.method == 'GET':
-            return DocumentSerializer
-        elif self.request.method == 'POST':
-            return DocumentCreateSerializer
-
-    def perform_create(self, serializer):
-        AccessControlList.objects.check_access(
-            obj=serializer.validated_data['document_type'],
-            permissions=(permission_document_create,), user=self.request.user
-        )
-        super().perform_create(serializer=serializer)
-
-    def get_instance_extra_data(self):
-        return {
-            '_event_actor': self.request.user,
-        }
 
 
 class APIDocumentDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -68,15 +37,45 @@ class APIDocumentDetailView(generics.RetrieveUpdateDestroyAPIView):
         'DELETE': (permission_document_trash,)
     }
     queryset = Document.objects.all()
+    serializer_class = DocumentSerializer
 
-    def get_serializer_class(self):
-        if self.request.method == 'GET':
-            return DocumentSerializer
-        else:
-            return DocumentWritableSerializer
+    def get_instance_extra_data(self):
+        return {
+            '_event_actor': self.request.user
+        }
 
 
-class APIDocumentTypeChangeView(generics.GenericAPIView):
+class APIDocumentListView(generics.ListCreateAPIView):
+    """
+    get: Returns a list of all the documents.
+    post: Create a new document.
+    """
+    mayan_object_permissions = {
+        'GET': (permission_document_view,),
+    }
+    queryset = Document.objects.all()
+    serializer_class = DocumentSerializer
+
+    def perform_create(self, serializer):
+        queryset = DocumentType.objects.all()
+
+        queryset = AccessControlList.objects.restrict_queryset(
+            permission=permission_document_create, queryset=queryset,
+            user=self.request.user
+        )
+
+        serializer.validated_data['document_type'] = get_object_or_404(
+            queryset=queryset, pk=serializer.validated_data['document_type_id']
+        )
+        super().perform_create(serializer=serializer)
+
+    def get_instance_extra_data(self):
+        return {
+            '_event_actor': self.request.user
+        }
+
+
+class APIDocumentChangeTypeView(generics.GenericAPIView):
     """
     post: Change the type of the selected document.
     """
@@ -85,68 +84,40 @@ class APIDocumentTypeChangeView(generics.GenericAPIView):
         'POST': (permission_document_properties_edit,),
     }
     queryset = Document.objects.all()
-    serializer_class = DocumentTypeChangeSerializer
+    serializer_class = DocumentChangeTypeSerializer
 
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        document_type = DocumentType.objects.get(pk=request.data['new_document_type'])
+        document_type = DocumentType.objects.get(
+            pk=request.data['document_type_id']
+        )
         self.get_object().document_type_change(
             document_type=document_type, _user=self.request.user
         )
         return Response(status=status.HTTP_200_OK)
 
 
-class APIRecentDocumentListView(generics.ListAPIView):
+class APIDocumentUploadView(generics.CreateAPIView):
     """
-    get: Return a list of the recent documents for the current user.
+    post: Create a new document and a new document file.
     """
-    serializer_class = RecentDocumentSerializer
+    serializer_class = DocumentUploadSerializer
 
-    def get_queryset(self):
-        return RecentDocument.objects.filter(user=self.request.user)
+    def perform_create(self, serializer):
+        queryset = DocumentType.objects.all()
 
+        queryset = AccessControlList.objects.restrict_queryset(
+            permission=permission_document_create, queryset=queryset,
+            user=self.request.user
+        )
 
-class APITrashedDocumentDetailView(generics.RetrieveDestroyAPIView):
-    """
-    Returns the selected trashed document details.
-    delete: Delete the trashed document.
-    get: Retreive the details of the trashed document.
-    """
-    lookup_url_kwarg = 'document_id'
-    mayan_object_permissions = {
-        'DELETE': (permission_trashed_document_delete,),
-        'GET': (permission_document_view,)
-    }
-    queryset = TrashedDocument.objects.all()
-    serializer_class = TrashedDocumentSerializer
+        serializer.validated_data['document_type'] = get_object_or_404(
+            queryset=queryset, pk=serializer.validated_data['document_type_id']
+        )
+        super().perform_create(serializer=serializer)
 
-
-class APITrashedDocumentListView(generics.ListAPIView):
-    """
-    Returns a list of all the trashed documents.
-    """
-    mayan_object_permissions = {'GET': (permission_document_view,)}
-    queryset = TrashedDocument.objects.all()
-    serializer_class = TrashedDocumentSerializer
-
-
-class APITrashedDocumentRestoreView(generics.GenericAPIView):
-    """
-    post: Restore a trashed document.
-    """
-    lookup_url_kwarg = 'document_id'
-    mayan_object_permissions = {
-        'POST': (permission_trashed_document_restore,)
-    }
-    queryset = TrashedDocument.objects.all()
-
-    def get_serializer(self, *args, **kwargs):
-        return None
-
-    def get_serializer_class(self):
-        return None
-
-    def post(self, *args, **kwargs):
-        self.get_object().restore()
-        return Response(status=status.HTTP_200_OK)
+    def get_instance_extra_data(self):
+        return {
+            '_event_actor': self.request.user
+        }

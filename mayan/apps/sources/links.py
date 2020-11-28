@@ -71,42 +71,42 @@ def condition_source_is_not_interactive(context):
 
 link_document_create_multiple = Link(
     condition=condition_document_creation_access,
-    icon_class=icon_document_create_multiple, text=_('New document'),
+    icon=icon_document_create_multiple, text=_('New document'),
     view='sources:document_create_multiple'
 )
 link_document_file_upload = Link(
     condition=condition_document_new_files_allowed,
     kwargs={'document_id': 'resolved_object.pk'},
-    icon_class=icon_document_file_upload,
+    icon=icon_document_file_upload,
     permissions=(permission_document_file_new,),
     text=_('Upload new file'), view='sources:document_file_upload',
 )
 
 link_source_backend_selection = Link(
-    icon_class=icon_source_backend_selection,
+    icon=icon_source_backend_selection,
     permissions=(permission_sources_create,),
     text=_('Create source'),
     view='sources:source_backend_selection'
 )
 link_source_delete = Link(
-    args=('resolved_object.pk',), icon_class=icon_source_delete,
+    args=('resolved_object.pk',), icon=icon_source_delete,
     permissions=(permission_sources_delete,), tags='dangerous',
     text=_('Delete'), view='sources:source_delete',
 )
 link_source_edit = Link(
-    args=('resolved_object.pk',), icon_class=icon_source_edit,
+    args=('resolved_object.pk',), icon=icon_source_edit,
     permissions=(permission_sources_edit,), text=_('Edit'),
     view='sources:source_edit',
 )
 link_source_list = Link(
-    icon_class=icon_source_list,
+    icon=icon_source_list,
     permissions=(permission_sources_view,), text=_('Sources'),
     view='sources:source_list'
 )
 link_source_test = Link(
     args=('resolved_object.pk',),
     condition=condition_source_is_not_interactive,
-    icon_class=icon_source_test,
+    icon=icon_source_test,
     permissions=(permission_sources_view,), text=_('Test'),
     view='sources:source_test',
 )

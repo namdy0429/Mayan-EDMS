@@ -47,7 +47,7 @@ icon_document_list = Icon(driver_name='fontawesome', symbol='book')
 icon_document_list_deleted = Icon(
     driver_name='fontawesome', symbol='trash-alt'
 )
-icon_document_list_recent_access = Icon(
+icon_document_recently_accessed_list = Icon(
     driver_name='fontawesome', symbol='clock'
 )
 icon_document_return = Icon(
@@ -69,10 +69,6 @@ icon_favorite_document_remove = Icon(
 
 # Document files
 
-icon_document_file_cache_purge = Icon(
-    driver_name='fontawesome-dual', primary_symbol='warehouse',
-    secondary_symbol='check'
-)
 icon_document_file_delete = Icon(
     driver_name='fontawesome', symbol='times'
 )
@@ -198,10 +194,6 @@ icon_document_type_setup = icon_document_type
 icon_document_version_active = Icon(
     driver_name='fontawesome', symbol='check'
 )
-icon_document_version_cache_purge = Icon(
-    driver_name='fontawesome-dual', primary_symbol='warehouse',
-    secondary_symbol='check'
-)
 icon_document_version_create = Icon(
     driver_name='fontawesome-dual', primary_symbol='code-branch',
     secondary_symbol='plus'
@@ -302,7 +294,7 @@ icon_duplicated_document_scan = Icon(
     secondary_class='far fa-eye'
 )
 
-icon_recent_added_document_list = Icon(
+icon_document_recently_created_list = Icon(
     driver_name='fontawesome', symbol='asterisk'
 )
 

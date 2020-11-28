@@ -4,7 +4,8 @@ from .models.document_models import TrashedDocument, Document
 from .models.document_file_models import DocumentFile
 from .models.document_file_page_models import DocumentFilePage
 from .models.document_type_models import DocumentType, DocumentTypeFilename
-from .models.misc_models import DuplicatedDocument, RecentDocument
+from .models.duplicated_document_models import DuplicatedDocument
+from .models.recently_accessed_document_models import RecentlyAccessedDocument
 
 
 class DocumentFilePageInline(admin.StackedInline):
@@ -28,21 +29,13 @@ class DocumentFileInline(admin.StackedInline):
     allow_add = True
 
 
-@admin.register(TrashedDocument)
-class TrashedDocumentAdmin(admin.ModelAdmin):
-    date_hierarchy = 'trashed_date_time'
-    list_filter = ('document_type',)
-    list_display = ('uuid', 'label', 'document_type', 'trashed_date_time')
-    readonly_fields = ('uuid', 'document_type')
-
-
 @admin.register(Document)
 class DocumentAdmin(admin.ModelAdmin):
-    date_hierarchy = 'date_added'
+    date_hierarchy = 'datetime_created'
     inlines = (DocumentFileInline,)
     list_filter = ('document_type', 'is_stub')
-    list_display = ('uuid', 'label', 'document_type', 'date_added', 'is_stub')
-    readonly_fields = ('uuid', 'document_type', 'date_added')
+    list_display = ('uuid', 'label', 'document_type', 'datetime_created', 'is_stub')
+    readonly_fields = ('uuid', 'document_type', 'datetime_created')
 
 
 @admin.register(DocumentType)
@@ -61,10 +54,18 @@ class DuplicatedDocumentAdmin(admin.ModelAdmin):
     )
 
 
-@admin.register(RecentDocument)
-class RecentDocumentAdmin(admin.ModelAdmin):
+@admin.register(RecentlyAccessedDocument)
+class RecentlyAccessedDocumentAdmin(admin.ModelAdmin):
     date_hierarchy = 'datetime_accessed'
     list_display = ('user', 'document', 'datetime_accessed')
     list_display_links = ('document', 'datetime_accessed')
     list_filter = ('user',)
     readonly_fields = ('user', 'document', 'datetime_accessed')
+
+
+@admin.register(TrashedDocument)
+class TrashedDocumentAdmin(admin.ModelAdmin):
+    date_hierarchy = 'trashed_date_time'
+    list_filter = ('document_type',)
+    list_display = ('uuid', 'label', 'document_type', 'trashed_date_time')
+    readonly_fields = ('uuid', 'document_type')

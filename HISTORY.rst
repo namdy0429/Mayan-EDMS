@@ -70,3 +70,37 @@
   trashed fields and manager methods.
 - Add document file download event.
 - Update Dropzone from version 5.4.0 to 5.7.2.
+- Rename all instances of "icon_class" to "icon" as only icon instances are
+  used now in every app.
+- Add icons to the mark notification as seen and mark all notification as
+  seen links.
+- Switch both view to mark notification as read to use the POST request
+  via a confirmation view.
+- Return the event type subscription list sorted by namespace label and event
+  type label.
+- Make the search fields more uniform and add missing ones.
+- Add full label for search parent fields.
+- Add events for the document type quick label model.
+- Add dedicated API endpoints for the document type quick label model.
+- Update the file cache partition purge view to be a generic view that can
+  be called using the content type of an object. Adds a new file cache
+  partition purge permission.
+- Added ContentTypeTestCaseMixin.
+- Include EventTestCaseMixin as part of the base test case mixin.
+- Rename usage of "recent document" to the more explicit "recently
+  accessed document". This was done at the mode, view and API level.
+  The recently accessed document API will now require the document view
+  permission.
+- Rename the document model ``date_added`` field to ``datetime_created`` to
+  better reflect the purpose of the field.
+- Add a RecentlyCreatedDocument proxy and associate the recent document
+  columns to it.
+- Move the recently created document query calculation to it own model
+  manager.
+- Add the recently created document API.
+- Add favorite documents API.
+- Rename the ``misc_models.py`` module to ``duplicated_document_models.py``.
+- Split the ``document_api_views.py`` modules into ``document_api_views.py``
+  and ``trashed_document_api_views.py``.
+- Add date time field to the favorite documents models to ensure deterministic
+  ordering when deleting the oldest favorites.

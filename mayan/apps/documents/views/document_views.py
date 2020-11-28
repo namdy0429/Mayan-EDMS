@@ -13,23 +13,17 @@ from mayan.apps.views.generics import (
 from ..events import event_document_viewed
 from ..forms.document_forms import DocumentForm, DocumentPropertiesForm
 from ..forms.document_type_forms import DocumentTypeFilteredSelectForm
-from ..icons import (
-    icon_document_list, icon_document_list_recent_access,
-    icon_recent_added_document_list
-)
+from ..icons import icon_document_list
 from ..models.document_models import Document
-from ..models.misc_models import RecentDocument
 from ..permissions import (
     permission_document_properties_edit, permission_document_view
 )
-from ..settings import setting_recent_added_count
 
 from .document_version_views import DocumentVersionPreviewView
 
 __all__ = (
-    'DocumentListView', 'DocumentTypeChangeView', 'DocumentPropertiesEditView',
-    'DocumentPreviewView', 'RecentAccessDocumentListView',
-    'RecentAddedDocumentListView'
+    'DocumentListView', 'DocumentTypeChangeView',
+    'DocumentPropertiesEditView', 'DocumentPreviewView'
 )
 logger = logging.getLogger(name=__name__)
 
@@ -201,53 +195,3 @@ class DocumentPropertiesView(SingleObjectDetailView):
             'object': self.object,
             'title': _('Properties of document: %s') % self.object,
         }
-
-
-class RecentAccessDocumentListView(DocumentListView):
-    def get_document_queryset(self):
-        return RecentDocument.objects.get_for_user(user=self.request.user)
-
-    def get_extra_context(self):
-        context = super().get_extra_context()
-        context.update(
-            {
-                'no_results_icon': icon_document_list_recent_access,
-                'no_results_text': _(
-                    'This view will list the latest documents viewed or '
-                    'manipulated in any way by this user account.'
-                ),
-                'no_results_title': _(
-                    'There are no recently accessed document'
-                ),
-                'title': _('Recently accessed'),
-            }
-        )
-        return context
-
-
-class RecentAddedDocumentListView(DocumentListView):
-    def get_document_queryset(self):
-        queryset = ModelQueryFields.get(model=Document).get_queryset()
-
-        return queryset.filter(
-            pk__in=queryset.order_by('-date_added')[
-                :setting_recent_added_count.value
-            ].values('pk')
-        ).order_by('-date_added')
-
-    def get_extra_context(self):
-        context = super().get_extra_context()
-        context.update(
-            {
-                'no_results_icon': icon_recent_added_document_list,
-                'no_results_text': _(
-                    'This view will list the latest documents uploaded '
-                    'in the system.'
-                ),
-                'no_results_title': _(
-                    'There are no recently added document'
-                ),
-                'title': _('Recently added'),
-            }
-        )
-        return context

@@ -11,6 +11,7 @@ from django.utils.encoding import force_text
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 
+from mayan.apps.common.mixins import ModelInstanceExtraDataAPIViewMixin
 from mayan.apps.converter.classes import ConverterBase
 from mayan.apps.converter.literals import DEFAULT_ZOOM_LEVEL, DEFAULT_ROTATION
 from mayan.apps.converter.models import LayerTransformation
@@ -22,7 +23,10 @@ from mayan.apps.events.classes import EventManagerMethodAfter, EventManagerSave
 from mayan.apps.events.decorators import method_event
 from mayan.apps.lock_manager.backends.base import LockingBackend
 
-from ..events import event_document_version_edited
+from ..events import (
+    event_document_version_page_created, event_document_version_page_deleted,
+    event_document_version_page_edited
+)
 from ..settings import (
     setting_display_width, setting_display_height, setting_zoom_max_level,
     setting_zoom_min_level
@@ -31,28 +35,32 @@ from ..settings import (
 from .document_version_models import DocumentVersion
 from .mixins import ModelMixinPagedModel
 
-__all__ = ('DocumentVersionPage', 'DocumentVersionPageResult')
+__all__ = ('DocumentVersionPage', 'DocumentVersionPageSearchResult')
 logger = logging.getLogger(name=__name__)
 
 
-class DocumentVersionPage(ModelMixinPagedModel, models.Model):
+class DocumentVersionPage(
+    ModelInstanceExtraDataAPIViewMixin, ModelMixinPagedModel, models.Model
+):
     _paged_model_parent_field = 'document_version'
 
     document_version = models.ForeignKey(
         on_delete=models.CASCADE, related_name='version_pages',
-        to=DocumentVersion, verbose_name=_('Document version'),
+        to=DocumentVersion, verbose_name=_('Document version')
     )
-    #page_number = models.PositiveIntegerField(
-    #    db_index=True, blank=True, null=True, verbose_name=_('Page number')
-    #)
     page_number = models.PositiveIntegerField(
-        db_index=True, default=1, editable=False,
-        verbose_name=_('Page number')
+        db_index=True, default=1, help_text=_(
+            'Unique integer number for the page. Pages are ordered by '
+            'this number.'
+        ), verbose_name=_('Page number')
     )
     content_type = models.ForeignKey(
+        help_text=_('Content type for the source object of the page.'),
         on_delete=models.CASCADE, to=ContentType
     )
-    object_id = models.PositiveIntegerField()
+    object_id = models.PositiveIntegerField(
+        help_text=_('ID for the source object of the page.')
+    )
     content_object = GenericForeignKey(
         ct_field='content_type', fk_field='object_id'
     )
@@ -75,7 +83,7 @@ class DocumentVersionPage(ModelMixinPagedModel, models.Model):
 
     @method_event(
         event_manager_class=EventManagerMethodAfter,
-        event=event_document_version_edited,
+        event=event_document_version_page_deleted,
         target='document_version',
     )
     def delete(self, *args, **kwargs):
@@ -287,22 +295,13 @@ class DocumentVersionPage(ModelMixinPagedModel, models.Model):
 
     def get_label(self):
         return _(
-            'Document version page %(page_number)d of %(total_pages)d from %(document_version)s'
+            '%(document_version)s page %(page_number)d of %(total_pages)d'
         ) % {
             'document_version': force_text(self.document_version),
             'page_number': self.page_number,
             'total_pages': self.get_pages_last_number() or 1
         }
     get_label.short_description = _('Label')
-
-    def get_page_number_display(self):
-        return _(
-            'Document version page %(page_number)d of %(total_pages)d'
-        ) % {
-            'page_number': self.page_number,
-            'total_pages': self.get_pages_last_number() or 1
-        }
-    get_page_number_display.short_description = _('Page number')
 
     @property
     def is_in_trash(self):
@@ -311,14 +310,14 @@ class DocumentVersionPage(ModelMixinPagedModel, models.Model):
     @method_event(
         event_manager_class=EventManagerSave,
         created={
-            'event': event_document_version_edited,
-            'action_object': 'self',
-            'target': 'document_version',
+            'event': event_document_version_page_created,
+            'action_object': 'document_version',
+            'target': 'self',
         },
         edited={
-            'event': event_document_version_edited,
-            'action_object': 'self',
-            'target': 'document_version',
+            'event': event_document_version_page_edited,
+            'action_object': 'document_version',
+            'target': 'self',
         }
     )
     def save(self, *args, **kwargs):
@@ -333,9 +332,8 @@ class DocumentVersionPage(ModelMixinPagedModel, models.Model):
         return '{}-{}'.format(self.document_version.uuid, self.pk)
 
 
-class DocumentVersionPageResult(DocumentVersionPage):
+class DocumentVersionPageSearchResult(DocumentVersionPage):
     class Meta:
-        ordering = ('document_version__document', 'page_number')
         proxy = True
         verbose_name = _('Document version page')
         verbose_name_plural = _('Document version pages')

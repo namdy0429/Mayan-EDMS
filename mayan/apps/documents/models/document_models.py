@@ -17,20 +17,23 @@ from mayan.apps.storage.compressed_files import Archive
 from mayan.apps.storage.exceptions import NoMIMETypeMatch
 
 from ..events import (
-    event_document_create, event_document_properties_edit,
-    event_document_trashed, event_document_type_changed,
+    event_document_created, event_document_edited,
+    event_document_trashed, event_document_type_changed
 )
 from ..literals import (
     DEFAULT_LANGUAGE, DOCUMENT_FILE_ACTION_PAGES_APPEND,
     DOCUMENT_FILE_ACTION_PAGES_KEEP, DOCUMENT_FILE_ACTION_PAGES_NEW
 )
-from ..managers import DocumentManager, TrashCanManager, ValidDocumentManager
+from ..managers import (
+    DocumentManager, RecentlyCreatedDocumentManager, TrashCanManager,
+    ValidDocumentManager
+)
 from ..signals import signal_post_document_type_change
 
 from .document_type_models import DocumentType
 from .mixins import ModelMixinHooks
 
-__all__ = ('Document', 'TrashedDocument', 'TrashedDocument')
+__all__ = ('Document', 'DocumentSearchResult', 'TrashedDocument')
 logger = logging.getLogger(name=__name__)
 
 
@@ -59,22 +62,26 @@ class Document(
     )
     label = models.CharField(
         blank=True, db_index=True, default='', max_length=255,
-        help_text=_('The name of the document.'), verbose_name=_('Label')
+        help_text=_(
+            'A short text identifying the document. By default, will be '
+            'set to the filename of the first file uploaded to the document.'
+        ),
+        verbose_name=_('Label')
     )
     description = models.TextField(
         blank=True, default='', help_text=_(
             'An optional short text describing a document.'
         ), verbose_name=_('Description')
     )
-    date_added = models.DateTimeField(
+    datetime_created = models.DateTimeField(
         auto_now_add=True, db_index=True, help_text=_(
             'The server date and time when the document was finally '
-            'processed and added to the system.'
-        ), verbose_name=_('Added')
+            'processed and created in the system.'
+        ), verbose_name=_('Created')
     )
     language = models.CharField(
         blank=True, default=DEFAULT_LANGUAGE, help_text=_(
-            'The dominant language in the document.'
+            'The primary language in the document.'
         ), max_length=8, verbose_name=_('Language')
     )
     in_trash = models.BooleanField(
@@ -125,10 +132,10 @@ class Document(
         return self.label or ugettext('Document stub, id: %d') % self.pk
 
     def add_as_recent_document_for_user(self, user):
-        RecentDocument = apps.get_model(
-            app_label='documents', model_name='RecentDocument'
+        RecentlyAccessedDocument = apps.get_model(
+            app_label='documents', model_name='RecentlyAccessedDocument'
         )
-        return RecentDocument.objects.add_document_for_user(
+        return RecentlyAccessedDocument.objects.add_document_for_user(
             document=self, user=user
         )
 
@@ -140,7 +147,6 @@ class Document(
             self.in_trash = True
             self.trashed_date_time = now()
             with transaction.atomic():
-                #self.save(_commit_events=False)
                 self._event_ignore = True
                 self.save()
                 event_document_trashed.commit(actor=_user, target=self)
@@ -154,15 +160,18 @@ class Document(
     def document_type_change(self, document_type, force=False, _user=None):
         has_changed = self.document_type != document_type
 
-        self.document_type = document_type
-        with transaction.atomic():
-            self.save()
-            if has_changed or force:
+        if has_changed or force:
+            self.document_type = document_type
+            with transaction.atomic():
+                self._event_ignore = True
+                self.save()
                 signal_post_document_type_change.send(
                     sender=self.__class__, instance=self
                 )
 
-                event_document_type_changed.commit(actor=_user, target=self)
+                event_document_type_changed.commit(
+                    action_object=document_type, actor=_user, target=self
+                )
                 if _user:
                     self.add_as_recent_document_for_user(user=_user)
 
@@ -227,10 +236,8 @@ class Document(
                 document=self, comment=comment, file=File(file=file_object),
                 filename=filename or file_object.name
             )
-            #document_file = self.files(
-            #    comment=comment or '', file=File(file=file_object)
-            #)
-            document_file.save(_user=_user)
+            document_file._event_actor = _user
+            document_file.save()
         except Exception as exception:
             logger.error(
                 'Error creating new file for document: %s; %s', self,
@@ -314,14 +321,13 @@ class Document(
     @method_event(
         event_manager_class=EventManagerSave,
         created={
-            'event': event_document_create,
+            'event': event_document_created,
             'action_object': 'document_type',
             'keep_attributes': '_event_actor',
             'target': 'self'
         },
         edited={
-            'event': event_document_properties_edit,
-            'action_object': 'document_type',
+            'event': event_document_edited,
             'target': 'self'
         }
     )
@@ -345,6 +351,19 @@ class Document(
             return self.versions.filter(active=True).first()
         except self.versions.model.DoesNotExist:
             return self.versions.none()
+
+
+class DocumentSearchResult(Document):
+    class Meta:
+        proxy = True
+
+
+class RecentlyCreatedDocument(Document):
+    objects = models.Manager()
+    recently_created = RecentlyCreatedDocumentManager()
+
+    class Meta:
+        proxy = True
 
 
 class TrashedDocument(Document):

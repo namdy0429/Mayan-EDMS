@@ -1,25 +1,24 @@
 from django.contrib import messages
 from django.contrib.contenttypes.models import ContentType
-from django.http import Http404, HttpResponseRedirect
+from django.db import models
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.template import RequestContext
-from django.urls import reverse
+from django.urls import reverse, reverse_lazy
 from django.utils.translation import ugettext_lazy as _
 
 from actstream.models import Action, any_stream
 
 from mayan.apps.acls.models import AccessControlList
 from mayan.apps.views.generics import (
-    FormView, SimpleView, SingleObjectListView
+    ConfirmView, FormView, SingleObjectListView
 )
 
 from .classes import EventType, ModelEventType
 from .forms import (
     EventTypeUserRelationshipFormSet, ObjectEventTypeUserRelationshipFormSet
 )
-from .icons import (
-    icon_events_list, icon_user_notifications_list
-)
+from .icons import icon_events_list, icon_user_notifications_list
 from .links import link_event_types_subscriptions_list
 from .models import StoredEventType
 from .permissions import permission_events_view
@@ -65,9 +64,6 @@ class EventTypeSubscriptionListView(FormView):
 
         return super().form_valid(form=form)
 
-    def get_object(self):
-        return self.request.user
-
     def get_extra_context(self):
         return {
             'form_display_mode_table': True,
@@ -89,13 +85,32 @@ class EventTypeSubscriptionListView(FormView):
             })
         return initial
 
-    def get_queryset(self):
-        # Return the queryset by name from the sorted list of the class
-        event_type_ids = [event_type.id for event_type in EventType.all()]
-        return self.submodel.objects.filter(name__in=event_type_ids)
+    def get_object(self):
+        return self.request.user
 
     def get_post_action_redirect(self):
         return reverse(viewname='user_management:current_user_details')
+
+    def get_queryset(self):
+        # Return the queryset by name from the sorted list of the class
+        event_type_ids = [event_type.id for event_type in EventType.all()]
+
+        # Preserve the queryset order to that of the sorted ID list by
+        # namespace label and event label.
+        # Create a conditional statement to annotate each row with the sort
+        # index number. Then sort the query set by the custom sort index
+        # field.
+        when_list = []
+        for sort_index, event_type_id in enumerate(event_type_ids):
+            when_list.append(models.When(name=event_type_id, then=sort_index))
+
+        queryset = self.submodel.objects.filter(name__in=event_type_ids)
+        queryset = queryset.annotate(
+            sort_index=models.Case(
+                *when_list, output_field=models.IntegerField()
+            )
+        )
+        return queryset.order_by('sort_index')
 
 
 class NotificationListView(SingleObjectListView):
@@ -119,28 +134,49 @@ class NotificationListView(SingleObjectListView):
         return self.request.user.notifications.all()
 
 
-class NotificationMarkRead(SimpleView):
-    def dispatch(self, *args, **kwargs):
+class NotificationMarkRead(ConfirmView):
+    post_action_redirect = reverse_lazy(
+        viewname='events:user_notifications_list'
+    )
+
+    def get_extra_context(self):
+        return {
+            'title': _('Mark the selected notification as read?')
+        }
+
+    def get_queryset(self):
+        return self.request.user.notifications.all()
+
+    def view_action(self, form=None):
         self.get_queryset().filter(
             pk=self.kwargs['notification_id']
         ).update(read=True)
-        return HttpResponseRedirect(
-            redirect_to=reverse(viewname='events:user_notifications_list')
+
+        messages.success(
+            message=_('Notification marked as read.'), request=self.request
         )
+
+
+class NotificationMarkReadAll(ConfirmView):
+    post_action_redirect = reverse_lazy(
+        viewname='events:user_notifications_list'
+    )
+
+    def get_extra_context(self):
+        return {
+            'title': _('Mark all notification as read?')
+        }
 
     def get_queryset(self):
         return self.request.user.notifications.all()
 
-
-class NotificationMarkReadAll(SimpleView):
-    def dispatch(self, *args, **kwargs):
+    def view_action(self, form=None):
         self.get_queryset().update(read=True)
-        return HttpResponseRedirect(
-            redirect_to=reverse(viewname='events:user_notifications_list')
-        )
 
-    def get_queryset(self):
-        return self.request.user.notifications.all()
+        messages.success(
+            message=_('All notifications marked as read.'),
+            request=self.request
+        )
 
 
 class ObjectEventListView(EventListView):
@@ -212,26 +248,6 @@ class ObjectEventTypeSubscriptionListView(FormView):
 
         return super().form_valid(form=form)
 
-    def get_object(self):
-        object_content_type = get_object_or_404(
-            klass=ContentType, app_label=self.kwargs['app_label'],
-            model=self.kwargs['model_name']
-        )
-
-        try:
-            content_object = object_content_type.get_object_for_this_type(
-                pk=self.kwargs['object_id']
-            )
-        except object_content_type.model_class().DoesNotExist:
-            raise Http404
-
-        AccessControlList.objects.check_access(
-            obj=content_object, permissions=(permission_events_view,),
-            user=self.request.user
-        )
-
-        return content_object
-
     def get_extra_context(self):
         return {
             'form_display_mode_table': True,
@@ -254,6 +270,26 @@ class ObjectEventTypeSubscriptionListView(FormView):
                 }
             )
         return initial
+
+    def get_object(self):
+        object_content_type = get_object_or_404(
+            klass=ContentType, app_label=self.kwargs['app_label'],
+            model=self.kwargs['model_name']
+        )
+
+        try:
+            content_object = object_content_type.get_object_for_this_type(
+                pk=self.kwargs['object_id']
+            )
+        except object_content_type.model_class().DoesNotExist:
+            raise Http404
+
+        AccessControlList.objects.check_access(
+            obj=content_object, permissions=(permission_events_view,),
+            user=self.request.user
+        )
+
+        return content_object
 
     def get_queryset(self):
         return ModelEventType.get_for_instance(instance=self.get_object())
