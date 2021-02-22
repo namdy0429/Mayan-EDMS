@@ -11,7 +11,7 @@ from django.utils.encoding import force_text
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 
-from mayan.apps.common.mixins import ModelInstanceExtraDataAPIViewMixin
+from mayan.apps.common.model_mixins import ExtraDataModelMixin
 from mayan.apps.converter.classes import ConverterBase
 from mayan.apps.converter.literals import DEFAULT_ZOOM_LEVEL, DEFAULT_ROTATION
 from mayan.apps.converter.models import LayerTransformation
@@ -27,20 +27,21 @@ from ..events import (
     event_document_version_page_created, event_document_version_page_deleted,
     event_document_version_page_edited
 )
+from ..managers import ValidDocumentVersionPageManager
 from ..settings import (
     setting_display_width, setting_display_height, setting_zoom_max_level,
     setting_zoom_min_level
 )
 
 from .document_version_models import DocumentVersion
-from .mixins import ModelMixinPagedModel
+from .mixins import PagedModelMixin
 
 __all__ = ('DocumentVersionPage', 'DocumentVersionPageSearchResult')
 logger = logging.getLogger(name=__name__)
 
 
 class DocumentVersionPage(
-    ModelInstanceExtraDataAPIViewMixin, ModelMixinPagedModel, models.Model
+    ExtraDataModelMixin, PagedModelMixin, models.Model
 ):
     _paged_model_parent_field = 'document_version'
 
@@ -70,6 +71,9 @@ class DocumentVersionPage(
         unique_together = ('document_version', 'page_number')
         verbose_name = _('Document version page')
         verbose_name_plural = _('Document version pages')
+
+    objects = models.Manager()
+    valid = ValidDocumentVersionPageManager()
 
     def __str__(self):
         return self.get_label()
@@ -297,7 +301,7 @@ class DocumentVersionPage(
         return _(
             '%(document_version)s page %(page_number)d of %(total_pages)d'
         ) % {
-            'document_version': force_text(self.document_version),
+            'document_version': force_text(s=self.document_version),
             'page_number': self.page_number,
             'total_pages': self.get_pages_last_number() or 1
         }

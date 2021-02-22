@@ -1,24 +1,34 @@
-from django.template.loader import render_to_string
+from django.apps import apps
+from django.core.exceptions import PermissionDenied
+
+from mayan.apps.navigation.html_widgets import SourceColumnWidget
 
 from .permissions import permission_cabinet_view
 
 
-def widget_document_cabinets(document, user):
+class DocumentCabinetWidget(SourceColumnWidget):
     """
-    A tag widget that displays the tags for the given document
+    A widget that displays the cabinets containing the given document.
     """
-    return render_to_string(
-        template_name='cabinets/document_cabinets_widget.html', context={
-            'cabinets': document.get_cabinets(
-                permission=permission_cabinet_view, user=user
+    template_name = 'cabinets/document_cabinets_widget.html'
+
+    def get_extra_context(self):
+        AccessControlList = apps.get_model(
+            app_label='acls', model_name='AccessControlList'
+        )
+
+        try:
+            AccessControlList.objects.check_access(
+                obj=self.value,
+                permissions=(permission_cabinet_view,),
+                user=self.request.user
             )
-        }
-    )
+        except PermissionDenied:
+            queryset = self.value.cabinets.none()
+        else:
+            queryset = self.value.get_cabinets(
+                permission=permission_cabinet_view,
+                user=self.request.user
+            )
 
-
-def widget_single_cabinet(cabinet):
-    return render_to_string(
-        template_name='cabinets/cabinet_widget.html', context={
-            'cabinet': cabinet
-        }
-    )
+        return {'cabinets': queryset}

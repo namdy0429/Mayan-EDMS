@@ -14,7 +14,7 @@ from mayan.apps.views.generics import (
     MultipleObjectConfirmActionView, SingleObjectCreateView,
     SingleObjectDetailView, SingleObjectEditView, SingleObjectListView
 )
-from mayan.apps.views.mixins import ExternalObjectMixin
+from mayan.apps.views.mixins import ExternalObjectViewMixin
 
 from ..events import event_workflow_edited
 from ..forms import (
@@ -89,9 +89,9 @@ class DocumentTypeWorkflowTemplatesView(AddRemoveView):
 
 class DocumentWorkflowTemplatesLaunchView(MultipleObjectFormActionView):
     form_class = WorkflowMultipleSelectionForm
-    model = Document
     object_permission = permission_workflow_tools
     pk_url_kwarg = 'document_id'
+    source_queryset = Document.valid
     success_message = _('Workflows launched for %(count)d document')
     success_message_plural = _('Workflows launched for %(count)d documents')
 
@@ -230,8 +230,10 @@ class WorkflowTemplateEditView(SingleObjectEditView):
             ) % self.object,
         }
 
-    def get_save_extra_data(self):
-        return {'_user': self.request.user}
+    def get_instance_extra_data(self):
+        return {
+            '_event_actor': self.request.user
+        }
 
 
 class WorkflowTemplateDocumentTypesView(AddRemoveView):
@@ -289,7 +291,7 @@ class WorkflowTemplateDocumentTypesView(AddRemoveView):
                 ).delete()
 
 
-class WorkflowTemplateLaunchView(ExternalObjectMixin, ConfirmView):
+class WorkflowTemplateLaunchView(ExternalObjectViewMixin, ConfirmView):
     external_object_class = Workflow
     external_object_permission = permission_workflow_tools
     external_object_pk_url_kwarg = 'workflow_template_id'

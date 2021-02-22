@@ -11,7 +11,7 @@ from mayan.apps.lock_manager.backends.base import LockingBackend
 from mayan.apps.lock_manager.exceptions import LockError
 
 from .literals import (
-    DEFAULT_SOURCE_LOCK_EXPIRE, DEFAULT_SOURCE_TASK_RETRY_DELAY
+    DEFAULT_SOURCES_LOCK_EXPIRE, DEFAULT_SOURCES_TASK_RETRY_DELAY
 )
 
 logger = logging.getLogger(name=__name__)
@@ -27,7 +27,7 @@ def task_source_process_document(source_id, dry_run=False):
     try:
         logger.debug('trying to acquire lock: %s', lock_id)
         lock = LockingBackend.get_instance().acquire_lock(
-            name=lock_id, timeout=DEFAULT_SOURCE_LOCK_EXPIRE
+            name=lock_id, timeout=DEFAULT_SOURCES_LOCK_EXPIRE
         )
     except LockError:
         logger.debug('unable to obtain lock: %s' % lock_id)
@@ -64,7 +64,7 @@ def task_generate_staging_file_image(
 
 
 @app.task(
-    bind=True, default_retry_delay=DEFAULT_SOURCE_TASK_RETRY_DELAY,
+    bind=True, default_retry_delay=DEFAULT_SOURCES_TASK_RETRY_DELAY,
     ignore_result=True
 )
 def task_process_document_upload(

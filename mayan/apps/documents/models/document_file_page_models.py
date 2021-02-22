@@ -16,20 +16,20 @@ from mayan.apps.converter.transformations import (
 )
 from mayan.apps.lock_manager.backends.base import LockingBackend
 
-from ..managers import DocumentFilePageManager
+from ..managers import DocumentFilePageManager, ValidDocumentFilePageManager
 from ..settings import (
     setting_display_width, setting_display_height, setting_zoom_max_level,
     setting_zoom_min_level
 )
 
 from .document_file_models import DocumentFile
-from .mixins import ModelMixinPagedModel
+from .mixins import PagedModelMixin
 
 __all__ = ('DocumentFilePage', 'DocumentFilePageSearchResult')
 logger = logging.getLogger(name=__name__)
 
 
-class DocumentFilePage(ModelMixinPagedModel, models.Model):
+class DocumentFilePage(PagedModelMixin, models.Model):
     """
     Model that describes a document file page
     """
@@ -50,6 +50,9 @@ class DocumentFilePage(ModelMixinPagedModel, models.Model):
         ordering = ('page_number',)
         verbose_name = _('Document file page')
         verbose_name_plural = _('Document file pages')
+
+    objects = DocumentFilePageManager()
+    valid = ValidDocumentFilePageManager()
 
     def __str__(self):
         return self.get_label()
@@ -245,10 +248,6 @@ class DocumentFilePage(ModelMixinPagedModel, models.Model):
                 )
                 raise
 
-    @property
-    def is_in_trash(self):
-        return self.document_file.document.is_in_trash
-
     def get_label(self):
         return _(
             '%(document_file)s - page %(page_num)d of %(total_pages)d'
@@ -258,6 +257,10 @@ class DocumentFilePage(ModelMixinPagedModel, models.Model):
             'total_pages': self.get_pages_last_number() or 1
         }
     get_label.short_description = _('Label')
+
+    @property
+    def is_in_trash(self):
+        return self.document_file.document.is_in_trash
 
     def natural_key(self):
         return (self.page_number, self.document_file.natural_key())

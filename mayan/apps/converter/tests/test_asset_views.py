@@ -41,8 +41,10 @@ class AssetViewTestCase(
         self.assertEqual(Asset.objects.count(), asset_count + 1)
 
         event = self._get_test_object_event()
-        self.assertEqual(event.verb, event_asset_created.id)
         self.assertEqual(event.actor, self._test_case_user)
+        self.assertEqual(event.action_object, None)
+        self.assertEqual(event.target, self.test_asset)
+        self.assertEqual(event.verb, event_asset_created.id)
 
     def test_asset_delete_view_no_permission(self):
         self._create_test_asset()
@@ -74,6 +76,36 @@ class AssetViewTestCase(
         self.assertEqual(response.status_code, 302)
 
         self.assertEqual(Asset.objects.count(), asset_count - 1)
+
+        event = self._get_test_object_event()
+        self.assertEqual(event, None)
+
+    def test_asset_detail_view_no_permission(self):
+        self._create_test_asset()
+
+        self._clear_events()
+
+        response = self._request_test_asset_detail_view()
+        self.assertNotContains(
+            response=response, text=self.test_asset.label, status_code=404
+        )
+
+        event = self._get_test_object_event()
+        self.assertEqual(event, None)
+
+    def test_asset_detail_view_with_access(self):
+        self._create_test_asset()
+
+        self.grant_access(
+            obj=self.test_asset, permission=permission_asset_view
+        )
+
+        self._clear_events()
+
+        response = self._request_test_asset_detail_view()
+        self.assertContains(
+            response=response, text=self.test_asset.label, status_code=200
+        )
 
         event = self._get_test_object_event()
         self.assertEqual(event, None)
@@ -112,8 +144,10 @@ class AssetViewTestCase(
         self.assertNotEqual(self.test_asset.label, asset_label)
 
         event = self._get_test_object_event()
-        self.assertEqual(event.verb, event_asset_edited.id)
         self.assertEqual(event.actor, self._test_case_user)
+        self.assertEqual(event.action_object, None)
+        self.assertEqual(event.target, self.test_asset)
+        self.assertEqual(event.verb, event_asset_edited.id)
 
     def test_asset_list_view_with_no_permission(self):
         self._create_test_asset()

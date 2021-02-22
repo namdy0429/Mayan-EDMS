@@ -10,7 +10,7 @@ from mayan.apps.views.generics import (
     SingleObjectCreateView, SingleObjectDeleteView, SingleObjectDetailView,
     SingleObjectEditView, SingleObjectListView
 )
-from mayan.apps.views.mixins import ExternalObjectMixin
+from mayan.apps.views.mixins import ExternalObjectViewMixin
 
 from .forms import UserForm
 from .icons import icon_group_setup, icon_user_setup
@@ -288,6 +288,7 @@ class UserGroupsView(AddRemoveView):
 
 class UserListView(SingleObjectListView):
     object_permission = permission_user_view
+    source_queryset = get_user_queryset()
 
     def get_extra_context(self):
         return {
@@ -305,17 +306,12 @@ class UserListView(SingleObjectListView):
             'title': _('Users'),
         }
 
-    def get_source_queryset(self):
-        return get_user_queryset()
 
-
-class UserOptionsEditView(ExternalObjectMixin, SingleObjectEditView):
+class UserOptionsEditView(ExternalObjectViewMixin, SingleObjectEditView):
     external_object_permission = permission_user_edit
     external_object_pk_url_kwarg = 'user_id'
+    external_object_queryset = get_user_queryset()
     fields = ('block_password_change',)
-
-    def get_external_object_queryset(self):
-        return get_user_queryset()
 
     def get_extra_context(self):
         return {

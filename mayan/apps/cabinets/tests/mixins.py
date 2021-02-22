@@ -9,7 +9,7 @@ from .literals import (
 
 class CabinetAPIViewTestMixin:
     def _request_test_cabinet_create_api_view(self, extra_data=None):
-        data = {'label': TEST_CABINET_LABEL}
+        data = {'label': TEST_CABINET_LABEL, 'parent': ''}
 
         if extra_data:
             data.update(extra_data)
@@ -26,28 +26,21 @@ class CabinetAPIViewTestMixin:
     def _request_test_cabinet_delete_api_view(self):
         return self.delete(
             viewname='rest_api:cabinet-detail', kwargs={
-                'pk': self.test_cabinet.pk
-            }
-        )
-
-    def _request_test_cabinet_document_remove_api_view(self):
-        return self.delete(
-            viewname='rest_api:cabinet-document', kwargs={
-                'pk': self.test_cabinet.pk, 'document_pk': self.test_document.pk
+                'cabinet_id': self.test_cabinet.pk
             }
         )
 
     def _request_test_cabinet_edit_api_patch_view(self):
         return self.patch(
             data={'label': TEST_CABINET_LABEL_EDITED}, kwargs={
-                'pk': self.test_cabinet.pk
+                'cabinet_id': self.test_cabinet.pk
             }, viewname='rest_api:cabinet-detail'
         )
 
     def _request_test_cabinet_edit_api_put_view(self):
         return self.put(
             data={'label': TEST_CABINET_LABEL_EDITED}, kwargs={
-                'pk': self.test_cabinet.pk
+                'cabinet_id': self.test_cabinet.pk
             }, viewname='rest_api:cabinet-detail'
         )
 
@@ -55,7 +48,34 @@ class CabinetAPIViewTestMixin:
         return self.get(viewname='rest_api:cabinet-list')
 
 
-class CabinetDocumentUploadTestMixin:
+class CabinetDocumentAPIViewTestMixin:
+    def _request_test_cabinet_document_add_api_view(self):
+        return self.post(
+            viewname='rest_api:cabinet-document-add', kwargs={
+                'cabinet_id': self.test_cabinet.pk
+            }, data={
+                'document': self.test_document.pk
+            }
+        )
+
+    def _request_test_cabinet_document_list_api_view(self):
+        return self.get(
+            viewname='rest_api:cabinet-document-list', kwargs={
+                'cabinet_id': self.test_cabinet.pk
+            }
+        )
+
+    def _request_test_cabinet_document_remove_api_view(self):
+        return self.post(
+            viewname='rest_api:cabinet-document-remove', kwargs={
+                'cabinet_id': self.test_cabinet.pk
+            }, data={
+                'document': self.test_document.pk
+            }
+        )
+
+
+class CabinetDocumentUploadWizardStepTestMixin:
     def _request_upload_interactive_document_create_view(self):
         with open(file=TEST_SMALL_DOCUMENT_PATH, mode='rb') as file_object:
             return self.post(
@@ -185,10 +205,10 @@ class CabinetViewTestMixin:
 
 
 class DocumentCabinetAPIViewTestMixin:
-    def _request_test_document_cabinet_list_view(self):
+    def _request_test_document_cabinet_list_api_view(self):
         return self.get(
             viewname='rest_api:document-cabinet-list', kwargs={
-                'pk': self.test_document.pk
+                'document_id': self.test_document.pk
             }
         )
 

@@ -12,7 +12,6 @@ from mayan.celery import app
 from .literals import (
     UPDATE_PAGE_COUNT_RETRY_DELAY, UPLOAD_NEW_VERSION_RETRY_DELAY
 )
-from .permissions import permission_document_version_export
 from .settings import (
     setting_task_document_file_page_image_generate_retry_delay,
     setting_task_document_version_page_image_generate_retry_delay
@@ -258,27 +257,22 @@ def task_document_version_page_list_reset(document_version_id):
 
 
 @app.task(ignore_result=True)
-def task_document_version_export(document_version_id):
-    DownloadFile = apps.get_model(
-        app_label='storage', model_name='DownloadFile'
-    )
+def task_document_version_export(document_version_id, user_id=None):
     DocumentVersion = apps.get_model(
         app_label='documents', model_name='DocumentVersion'
     )
+    User = get_user_model()
+
+    if user_id:
+        user = User.objects.get(pk=user_id)
+    else:
+        user = None
 
     document_version = DocumentVersion.objects.get(
         pk=document_version_id
     )
 
-    download_file = DownloadFile.objects.create(
-        content_object=document_version,
-        filename='{}.pdf'.format(document_version),
-        label=_('Document version export to PDF'),
-        permission=permission_document_version_export.stored_permission
-    )
-
-    with download_file.open(mode='wb+') as file_object:
-        document_version.export(file_object=file_object)
+    document_version.export_to_download_file(user=user)
 
 
 # Document version page
@@ -315,39 +309,6 @@ def task_document_version_page_image_generate(
             document_version_page.pk,
         )
         raise self.retry(exc=exception)
-
-
-# Duplicates
-
-@app.task(ignore_result=True)
-def task_duplicates_clean_empty_lists():
-    DuplicatedDocument = apps.get_model(
-        app_label='documents', model_name='DuplicatedDocument'
-    )
-    DuplicatedDocument.objects.clean_empty_duplicate_lists()
-
-
-@app.task(ignore_result=True)
-def task_duplicates_scan_all():
-    DuplicatedDocument = apps.get_model(
-        app_label='documents', model_name='DuplicatedDocument'
-    )
-
-    DuplicatedDocument.objects.scan()
-
-
-@app.task(ignore_result=True)
-def task_duplicates_scan_for(document_id):
-    Document = apps.get_model(
-        app_label='documents', model_name='Document'
-    )
-    DuplicatedDocument = apps.get_model(
-        app_label='documents', model_name='DuplicatedDocument'
-    )
-
-    document = Document.objects.get(pk=document_id)
-
-    DuplicatedDocument.objects.scan_for(document=document)
 
 
 # Trash can

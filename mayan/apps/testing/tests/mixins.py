@@ -3,6 +3,7 @@ import importlib
 import logging
 import os
 import random
+import time
 
 from furl import furl
 from selenium.webdriver.firefox.options import Options
@@ -157,6 +158,11 @@ class ContentTypeTestCaseMixin:
         }
 
 
+class DelayTestCaseMixin:
+    def _test_delay(self, seconds=0.1):
+        time.sleep(seconds)
+
+
 class DownloadTestCaseMixin:
     def assert_download_response(
         self, response, content=None, filename=None, is_attachment=None,
@@ -175,7 +181,7 @@ class DownloadTestCaseMixin:
             response_content = b''.join(list(response))
 
             try:
-                response_content = force_text(response_content)
+                response_content = force_text(s=response_content)
             except DjangoUnicodeDecodeError:
                 """Leave as bytes"""
 
@@ -435,7 +441,6 @@ class TempfileCheckTestCasekMixin:
 
 
 class TestModelTestCaseMixin(ContentTypeTestCaseMixin, PermissionTestMixin):
-    _test_models = []
     auto_create_test_object = False
     auto_create_test_object_fields = None
     auto_create_test_object_instance_kwargs = None
@@ -449,6 +454,9 @@ class TestModelTestCaseMixin(ContentTypeTestCaseMixin, PermissionTestMixin):
         super().setUpClass()
 
     def setUp(self):
+        self._test_models = []
+        self.test_objects = []
+
         super().setUp()
 
         if self.auto_create_test_object:
@@ -475,7 +483,9 @@ class TestModelTestCaseMixin(ContentTypeTestCaseMixin, PermissionTestMixin):
         self, base_class=models.Model, fields=None, model_name=None,
         options=None
     ):
-        self.model_name = model_name or 'TestModel'
+        test_model_count = len(self._test_models)
+        self._test_model_name = model_name or '{}_{}'.format('TestModel', test_model_count)
+
         self.options = options
         # Obtain the app_config and app_label from the test's module path
         self.app_config = apps.get_containing_app_config(
@@ -500,10 +510,10 @@ class TestModelTestCaseMixin(ContentTypeTestCaseMixin, PermissionTestMixin):
         # Clear previous model registration before re-registering it again to
         # avoid conflict with test models with the same name, in the same app
         # but from another test module.
-        apps.all_models[self.app_config.label].pop(self.model_name.lower(), None)
+        apps.all_models[self.app_config.label].pop(self._test_model_name.lower(), None)
 
         model = type(
-            self.model_name, (base_class,), attrs
+            self._test_model_name, (base_class,), attrs
         )
 
         if not model._meta.proxy:
@@ -521,7 +531,9 @@ class TestModelTestCaseMixin(ContentTypeTestCaseMixin, PermissionTestMixin):
     ):
         instance_kwargs = instance_kwargs or {}
 
-        self.TestModel = self._create_test_model(fields=fields, model_name=model_name)
+        self.TestModel = self._create_test_model(
+            fields=fields, model_name=model_name
+        )
         self.test_object = self.TestModel.objects.create(**instance_kwargs)
         self._inject_test_object_content_type()
 
@@ -534,15 +546,17 @@ class TestModelTestCaseMixin(ContentTypeTestCaseMixin, PermissionTestMixin):
                 )
             )
 
+        self.test_objects.append(self.test_object)
+
     def _get_test_model_meta(self):
-        self.db_table = '{}_{}'.format(
-            self.app_config.label, self.model_name.lower()
+        self._test_db_table = '{}_{}'.format(
+            self.app_config.label, self._test_model_name.lower()
         )
 
         class Meta:
             app_label = self.app_config.label
-            db_table = self.db_table
-            verbose_name = self.model_name
+            db_table = self._test_db_table
+            verbose_name = self._test_model_name
 
         if self.options:
             for key, value in self.options.items():

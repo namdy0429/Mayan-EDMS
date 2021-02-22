@@ -1,7 +1,5 @@
 from django import forms
 from django.template.loader import render_to_string
-from django.utils.safestring import mark_safe
-from django.utils.translation import ugettext_lazy as _
 
 from .settings import (
     setting_display_width, setting_display_height, setting_preview_width,
@@ -36,38 +34,6 @@ class CarouselWidget(forms.widgets.Widget):
 
 class DocumentFilePagesCarouselWidget(CarouselWidget):
     target_view = 'documents:document_file_page_view'
-
-
-class ThumbnailWidget:
-    container_class = '',
-    gallery_name = ''
-
-    def disable_condition(self, instance):
-        return True
-
-    def render(self, instance):
-        return render_to_string(
-            template_name='documents/widgets/thumbnail.html',
-            context={
-                # Disable the clickable link if the document is in the trash
-                'container_class': self.container_class,
-                'disable_title_link': self.disable_condition(instance=instance),
-                'gallery_name': self.gallery_name,
-                'instance': instance,
-                'size_preview_width': setting_preview_width.value,
-                'size_preview_height': setting_preview_height.value,
-                'size_thumbnail_width': setting_thumbnail_width.value,
-                'size_thumbnail_height': setting_thumbnail_height.value,
-            }
-        )
-
-
-class BaseDocumentThumbnailWidget(ThumbnailWidget):
-    container_class = '',
-    gallery_name = 'document_list'
-
-    def disable_condition(self, instance):
-        return instance.is_in_trash
 
 
 class ThumbnailFormWidget(forms.widgets.Widget):
@@ -114,21 +80,3 @@ class PageImageWidget(forms.widgets.Widget):
         if value == '' or value is None:
             return None
         return value
-
-
-def document_link(document):
-    return mark_safe('<a href="%s">%s</a>' % (
-        document.get_absolute_url(), document)
-    )
-
-
-def widget_document_file_page_number(document_file):
-    return mark_safe(s=_('Pages: %d') % document_file.pages.count())
-
-
-def widget_document_page_number(document):
-    return mark_safe(s=_('Pages: %d') % document.pages.count())
-
-
-def widget_document_version_page_number(document_version):
-    return mark_safe(s=_('Pages: %d') % document_version.pages.count())

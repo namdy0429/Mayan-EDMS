@@ -22,12 +22,14 @@ from .mixins import (
 class DocumentIndexViewTestCase(
     DocumentIndexViewTestMixin, IndexTestMixin, GenericDocumentViewTestCase
 ):
+    auto_upload_test_document = False
+
     def setUp(self):
         super().setUp()
         self._create_test_index()
         self._create_test_index_template_node()
         self.test_index.document_types.add(self.test_document_type)
-        self._upload_test_document()
+        self._create_test_document_stub()
 
     def test_document_index_list_view_no_permission(self):
         response = self._request_test_document_index_list_view()
@@ -53,7 +55,7 @@ class DocumentIndexViewTestCase(
             count=0, response=response, status_code=200, text=TEST_INDEX_LABEL
         )
         # 4 instances: title heading, title heading hover, JavaScript
-        # document title
+        # document title.
         self.assertContains(
             count=3, response=response, status_code=200, text=self.test_document
         )
@@ -73,10 +75,25 @@ class DocumentIndexViewTestCase(
             count=1, response=response, status_code=200, text=TEST_INDEX_LABEL
         )
         # 4 instances: title heading, title heading hover, JavaScript
-        # document title, index entry
+        # document title, index entry.
         self.assertContains(
             count=4, response=response, status_code=200, text=self.test_document
         )
+
+    def test_trashed_document_index_list_view_with_full_access(self):
+        self.grant_access(
+            obj=self.test_index,
+            permission=permission_document_indexing_instance_view
+        )
+        self.grant_access(
+            obj=self.test_document,
+            permission=permission_document_view
+        )
+
+        self.test_document.delete()
+
+        response = self._request_test_document_index_list_view()
+        self.assertEqual(response.status_code, 404)
 
 
 class IndexViewTestCase(
@@ -155,12 +172,14 @@ class IndexViewTestCase(
         self.assertEqual(self.test_index.label, TEST_INDEX_LABEL_EDITED)
 
 
-class IndexInstaceViewTestCase(
+class IndexInstanceViewTestCase(
     IndexTestMixin, IndexViewTestMixin, IndexInstanceViewTestMixin,
     GenericDocumentViewTestCase
 ):
+    auto_upload_test_document = False
+
     def test_index_rebuild_view_no_permission(self):
-        self._upload_test_document()
+        self._create_test_document_stub()
         self._create_test_index()
         self._create_test_index_template_node()
 
@@ -171,7 +190,7 @@ class IndexInstaceViewTestCase(
         self.assertEqual(IndexInstanceNode.objects.first().parent, None)
 
     def test_index_rebuild_view_with_access(self):
-        self._upload_test_document()
+        self._create_test_document_stub()
         self._create_test_index()
         self._create_test_index_template_node()
 
@@ -185,7 +204,7 @@ class IndexInstaceViewTestCase(
 
         self.assertNotEqual(IndexInstanceNode.objects.count(), 0)
 
-    def test_index_instance_node_view_no_permission(self):
+    def test_index_instance_root_node_view_no_permission(self):
         self._create_test_index()
 
         response = self._request_test_index_instance_node_view(
@@ -193,7 +212,7 @@ class IndexInstaceViewTestCase(
         )
         self.assertEqual(response.status_code, 403)
 
-    def test_index_instance_node_view_with_access(self):
+    def test_index_instance_root_node_view_with_access(self):
         self._create_test_index()
 
         self.grant_access(
@@ -204,7 +223,107 @@ class IndexInstaceViewTestCase(
         response = self._request_test_index_instance_node_view(
             index_instance_node=self.test_index.instance_root
         )
-        self.assertContains(response, text=TEST_INDEX_LABEL, status_code=200)
+        self.assertContains(
+            response=response, text=TEST_INDEX_LABEL, status_code=200
+        )
+
+    def test_index_instance_document_node_view_no_permission(self):
+        self._create_test_document_stub()
+        self._create_test_index()
+        self._create_test_index_template_node(
+            expression='{{ document.pk }}', rebuild=True
+        )
+
+        response = self._request_test_index_instance_node_view(
+            index_instance_node=self.test_index_instance_node
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_index_instance_document_node_view_with_index_access(self):
+        self._create_test_document_stub()
+        self._create_test_index()
+        self._create_test_index_template_node(
+            expression='{{ document.pk }}', rebuild=True
+        )
+
+        self.grant_access(
+            obj=self.test_index,
+            permission=permission_document_indexing_instance_view
+        )
+
+        response = self._request_test_index_instance_node_view(
+            index_instance_node=self.test_index_instance_node
+        )
+        self.assertContains(
+            response=response, text=TEST_INDEX_LABEL, status_code=200
+        )
+        self.assertNotContains(
+            response=response, text=self.test_document.label, status_code=200
+        )
+
+    def test_index_instance_document_node_view_with_document_access(self):
+        self._create_test_document_stub()
+        self._create_test_index()
+        self._create_test_index_template_node(expression='{{ document.pk }}', rebuild=True)
+
+        self.grant_access(
+            obj=self.test_document, permission=permission_document_view
+        )
+
+        response = self._request_test_index_instance_node_view(
+            index_instance_node=self.test_index_instance_node
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_index_instance_document_node_view_with_full_access(self):
+        self._create_test_document_stub()
+        self._create_test_index()
+        self._create_test_index_template_node(expression='{{ document.pk }}', rebuild=True)
+
+        self.grant_access(
+            obj=self.test_index,
+            permission=permission_document_indexing_instance_view
+        )
+        self.grant_access(
+            obj=self.test_document, permission=permission_document_view
+        )
+
+        response = self._request_test_index_instance_node_view(
+            index_instance_node=self.test_index_instance_node
+        )
+
+        self.assertContains(
+            response=response, text=TEST_INDEX_LABEL, status_code=200
+        )
+        self.assertContains(
+            response=response, text=self.test_document.label, status_code=200
+        )
+
+    def test_index_instance_trashed_document_node_view_with_full_access(self):
+        self._create_test_document_stub()
+        self._create_test_index()
+        self._create_test_index_template_node(expression='{{ document.pk }}', rebuild=True)
+
+        self.grant_access(
+            obj=self.test_index,
+            permission=permission_document_indexing_instance_view
+        )
+        self.grant_access(
+            obj=self.test_document, permission=permission_document_view
+        )
+
+        self.test_document.delete()
+
+        response = self._request_test_index_instance_node_view(
+            index_instance_node=self.test_index_instance_node
+        )
+
+        self.assertContains(
+            response=response, text=TEST_INDEX_LABEL, status_code=200
+        )
+        self.assertNotContains(
+            response=response, text=self.test_document.label, status_code=200
+        )
 
 
 class IndexTemplateNodeViewTestCase(
@@ -311,8 +430,14 @@ class IndexToolsViewTestCase(
     IndexTestMixin, IndexViewTestMixin, IndexToolsViewTestMixin,
     GenericDocumentViewTestCase
 ):
+    auto_upload_test_document = False
+
+    def setUp(self):
+        super().setUp()
+        self._create_test_document_stub()
+
     def test_indexes_rebuild_no_permission(self):
-        self._create_test_index(rebuild=False)
+        self._create_test_index()
 
         response = self._request_indexes_rebuild_get_view()
         self.assertNotContains(
@@ -320,7 +445,7 @@ class IndexToolsViewTestCase(
         )
 
         response = self._request_indexes_rebuild_post_view()
-        # No error since we just don't see the index
+        # No error since we just don't see the index.
         self.assertEqual(response.status_code, 200)
 
         self.assertEqual(
@@ -328,7 +453,7 @@ class IndexToolsViewTestCase(
         )
 
     def test_indexes_rebuild_with_access(self):
-        self._create_test_index(rebuild=False)
+        self._create_test_index()
 
         self.grant_access(
             obj=self.test_index,
@@ -343,11 +468,11 @@ class IndexToolsViewTestCase(
         response = self._request_indexes_rebuild_post_view()
         self.assertEqual(response.status_code, 302)
 
-        # An instance root exists
+        # An instance root exists.
         self.assertTrue(self.test_index.instance_root.pk)
 
     def test_indexes_reset_no_permission(self):
-        self._create_test_index(rebuild=False)
+        self._create_test_index()
         self._create_test_index_template_node()
         self.test_index.rebuild()
 
@@ -357,7 +482,7 @@ class IndexToolsViewTestCase(
         )
 
         response = self._request_indexes_reset_post_view()
-        # No error since we just don't see the index
+        # No error since we just don't see the index.
         self.assertEqual(response.status_code, 200)
 
         self.assertEqual(
@@ -365,7 +490,7 @@ class IndexToolsViewTestCase(
         )
 
     def test_indexes_reset_with_access(self):
-        self._create_test_index(rebuild=False)
+        self._create_test_index()
         self._create_test_index_template_node()
         self.test_index.rebuild()
 

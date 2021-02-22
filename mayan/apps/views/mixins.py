@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ImproperlyConfigured
+from django.db.models.query import QuerySet
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
@@ -43,7 +44,7 @@ class ContentTypeViewMixin:
         )
 
 
-class DeleteExtraDataMixin:
+class ExtraDataDeleteViewMixin:
     """
     Mixin to populate the extra data needed for delete views
     """
@@ -63,7 +64,7 @@ class DeleteExtraDataMixin:
         return HttpResponseRedirect(redirect_to=success_url)
 
 
-class DownloadMixin:
+class DownloadViewMixin:
     as_attachment = True
 
     def get_as_attachment(self):
@@ -95,23 +96,7 @@ class DynamicFormViewMixin:
         return data
 
 
-class ExtraContextMixin:
-    """
-    Mixin that allows views to pass extra context to the template much easier
-    than overloading .get_context_data().
-    """
-    extra_context = {}
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context.update(self.get_extra_context())
-        return context
-
-    def get_extra_context(self):
-        return self.extra_context
-
-
-class ExternalObjectMixin:
+class ExternalObjectViewMixin:
     """
     Mixin to allow views to load an object with minimal code but with all
     the filtering and configurability possible. This object is often use as
@@ -135,10 +120,11 @@ class ExternalObjectMixin:
         else:
             pk_url_kwargs['pk'] = self.external_object_pk_url_kwarg
 
+        result = {}
         for key, value in pk_url_kwargs.items():
-            pk_url_kwargs[key] = self.kwargs[value]
+            result[key] = self.kwargs[value]
 
-        return pk_url_kwargs
+        return result
 
     def get_external_object(self):
         return get_object_or_404(
@@ -150,20 +136,23 @@ class ExternalObjectMixin:
         return self.external_object_permission
 
     def get_external_object_queryset(self):
-        if not self.external_object_queryset and not self.external_object_class:
-            raise ImproperlyConfigured(
-                'View must provide either an external_object_queryset, '
-                'an external_object_class or a custom '
-                'get_external_object_queryset() method.'
-            )
-
-        queryset = self.external_object_queryset
-
-        if not queryset:
+        if self.external_object_queryset is not None:
+            queryset = self.external_object_queryset
+            if isinstance(queryset, QuerySet):
+                queryset = queryset.all()
+        elif self.external_object_class is not None:
             manager = ModelPermission.get_manager(
                 model=self.external_object_class
             )
             queryset = manager.all()
+        else:
+            raise ImproperlyConfigured(
+                'View `{}` must provide either an external_object_queryset, '
+                'an external_object_class or a custom '
+                'get_external_object_queryset() method.'.format(
+                    self.__class__.__name__
+                )
+            )
 
         return queryset
 
@@ -180,7 +169,9 @@ class ExternalObjectMixin:
         return queryset
 
 
-class ExternalContentTypeObjectMixin(ContentTypeViewMixin, ExternalObjectMixin):
+class ExternalContentTypeObjectViewMixin(
+    ContentTypeViewMixin, ExternalObjectViewMixin
+):
     """
     Mixin to retrieve an external object by content type from the URL pattern.
     """
@@ -192,7 +183,23 @@ class ExternalContentTypeObjectMixin(ContentTypeViewMixin, ExternalObjectMixin):
         return super().get_external_object_queryset()
 
 
-class FormExtraKwargsMixin:
+class ExtraContextViewMixin:
+    """
+    Mixin that allows views to pass extra context to the template much easier
+    than overloading .get_context_data().
+    """
+    extra_context = {}
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(self.get_extra_context())
+        return context
+
+    def get_extra_context(self):
+        return self.extra_context
+
+
+class FormExtraKwargsViewMixin:
     """
     Mixin that allows a view to pass extra keyword arguments to forms
     """
@@ -207,7 +214,7 @@ class FormExtraKwargsMixin:
         return result
 
 
-class ListModeMixin:
+class ListModeViewMixin:
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
@@ -228,7 +235,7 @@ class ListModeMixin:
         return context
 
 
-class MultipleObjectMixin(SingleObjectMixin):
+class MultipleObjectViewMixin(SingleObjectMixin):
     """
     Mixin that allows a view to work on a single or multiple objects. It can
     receive a pk, a slug or a list of IDs via an id_list query.
@@ -335,18 +342,18 @@ class MultipleObjectMixin(SingleObjectMixin):
             return None
 
 
-class ObjectActionMixin:
+class ObjectActionViewMixin:
     """
     Mixin that performs a user action to a queryset
     """
-    error_message = 'Unable to perform operation on object %(instance)s; %(exception)s.'
+    error_message = _('Unable to perform operation on object %(instance)s; %(exception)s.')
     post_object_action_url = None
-    success_message_single = 'Operation performed on %(object)s.'
-    success_message_singular = 'Operation performed on %(count)d object.'
-    success_message_plural = 'Operation performed on %(count)d objects.'
-    title_single = 'Perform operation on %(object)s.'
-    title_singular = 'Perform operation on %(count)d object.'
-    title_plural = 'Perform operation on %(count)d objects.'
+    success_message_single = _('Operation performed on %(object)s.')
+    success_message_singular = _('Operation performed on %(count)d object.')
+    success_message_plural = _('Operation performed on %(count)d objects.')
+    title_single = _('Perform operation on %(object)s.')
+    title_singular = _('Perform operation on %(count)d object.')
+    title_plural = _('Perform operation on %(count)d objects.')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -416,7 +423,7 @@ class ObjectActionMixin:
             self.success_url = success_url
 
 
-class ObjectNameMixin:
+class ObjectNameViewMixin:
     def get_object_name(self, context=None):
         if not context:
             context = self.get_context_data()
@@ -433,7 +440,7 @@ class ObjectNameMixin:
         return object_name
 
 
-class RedirectionMixin:
+class RedirectionViewMixin:
     action_cancel_redirect = None
     next_url = None
     previous_url = None
@@ -489,7 +496,7 @@ class RedirectionMixin:
         return self.success_url or self.get_next_url() or self.get_previous_url()
 
 
-class RestrictedQuerysetMixin:
+class RestrictedQuerysetViewMixin:
     """
     Restrict the view's queryset against a permission via ACL checking.
     Used to restrict the object list of a multiple object view or the source
@@ -520,9 +527,9 @@ class RestrictedQuerysetMixin:
                 return self.model._default_manager.all()
             else:
                 raise ImproperlyConfigured(
-                    "%(cls)s is missing a QuerySet. Define "
-                    "%(cls)s.model, %(cls)s.source_queryset, or override "
-                    "%(cls)s.get_source_queryset()." % {
+                    '%(cls)s is missing a QuerySet. Define '
+                    '%(cls)s.model, %(cls)s.source_queryset, or override '
+                    '%(cls)s.get_source_queryset().' % {
                         'cls': self.__class__.__name__
                     }
                 )
@@ -530,7 +537,7 @@ class RestrictedQuerysetMixin:
         return self.source_queryset.all()
 
 
-class ViewPermissionCheckMixin:
+class ViewPermissionCheckViewMixin:
     """
     Restrict access to the view based on the user's direct permissions from
     roles. This mixing is used for views whose objects don't support ACLs or

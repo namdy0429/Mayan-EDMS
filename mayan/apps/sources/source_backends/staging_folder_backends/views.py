@@ -1,7 +1,7 @@
 from django.utils.translation import ugettext_lazy as _
 
 from mayan.apps.views.generics import SingleObjectDeleteView
-from mayan.apps.views.mixins import ExternalObjectMixin
+from mayan.apps.views.mixins import ExternalObjectViewMixin
 
 from ...models import Source
 from ...permissions import permission_sources_view
@@ -9,7 +9,7 @@ from ...permissions import permission_sources_view
 __all__ = ('StagingFileDeleteView',)
 
 
-class StagingFileDeleteView(ExternalObjectMixin, SingleObjectDeleteView):
+class StagingFileDeleteView(ExternalObjectViewMixin, SingleObjectDeleteView):
     external_object_class = Source
     external_object_permission = permission_sources_view
     external_object_pk_url_kwarg = 'staging_folder_id'

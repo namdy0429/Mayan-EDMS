@@ -15,7 +15,7 @@ from mayan.apps.views.generics import (
     AddRemoveView, SingleObjectCreateView, SingleObjectDeleteView,
     SingleObjectEditView, SingleObjectListView
 )
-from mayan.apps.views.mixins import ExternalObjectMixin
+from mayan.apps.views.mixins import ExternalObjectViewMixin
 
 from .events import event_web_link_edited
 from .forms import WebLinkForm
@@ -77,10 +77,10 @@ class DocumentTypeWebLinksView(AddRemoveView):
         }
 
 
-class ResolvedWebLinkView(ExternalObjectMixin, RedirectView):
-    external_object_class = Document
+class ResolvedWebLinkView(ExternalObjectViewMixin, RedirectView):
     external_object_pk_url_kwarg = 'document_id'
     external_object_permission = permission_web_link_instance_view
+    external_object_queryset = Document.valid
 
     def get_redirect_url(self, *args, **kwargs):
         return self.get_web_link().get_redirect(
@@ -115,7 +115,7 @@ class WebLinkDocumentTypesView(AddRemoveView):
     related_field = 'document_types'
 
     def get_actions_extra_kwargs(self):
-        return {'_user': self.request.user}
+        return {'_event_actor': self.request.user}
 
     def get_extra_context(self):
         return {
@@ -155,10 +155,10 @@ class WebLinkListView(SingleObjectListView):
         return WebLink.objects.all()
 
 
-class DocumentWebLinkListView(ExternalObjectMixin, WebLinkListView):
-    external_object_class = Document
+class DocumentWebLinkListView(ExternalObjectViewMixin, WebLinkListView):
     external_object_permission = permission_web_link_instance_view
     external_object_pk_url_kwarg = 'document_id'
+    external_object_queryset = Document.valid
     object_permission = permission_web_link_instance_view
 
     def get_extra_context(self):
@@ -193,8 +193,8 @@ class WebLinkCreateView(SingleObjectCreateView):
     )
     view_permission = permission_web_link_create
 
-    def get_save_extra_data(self):
-        return {'_user': self.request.user}
+    def get_instance_extra_data(self):
+        return {'_event_actor': self.request.user}
 
 
 class WebLinkDeleteView(SingleObjectDeleteView):
@@ -227,5 +227,5 @@ class WebLinkEditView(SingleObjectEditView):
             'title': _('Edit web link: %s') % self.object
         }
 
-    def get_save_extra_data(self):
-        return {'_user': self.request.user}
+    def get_instance_extra_data(self):
+        return {'_event_actor': self.request.user}

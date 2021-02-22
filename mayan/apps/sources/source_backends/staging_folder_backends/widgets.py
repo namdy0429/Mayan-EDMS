@@ -1,4 +1,4 @@
-from mayan.apps.documents.widgets import ThumbnailWidget
+from mayan.apps.documents.html_widgets import ThumbnailWidget
 
 
 class StagingFileThumbnailWidget(ThumbnailWidget):

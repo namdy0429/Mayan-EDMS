@@ -83,8 +83,10 @@ INSTALLED_APPS = (
     'mayan.apps.dynamic_search',
     'mayan.apps.events',
     'mayan.apps.file_caching',
+    'mayan.apps.locales',
     'mayan.apps.lock_manager',
     'mayan.apps.logging',
+    'mayan.apps.messaging',
     'mayan.apps.mimetype',
     'mayan.apps.navigation',
     'mayan.apps.permissions',
@@ -99,6 +101,7 @@ INSTALLED_APPS = (
     'mayan.apps.user_management',
     'mayan.apps.views',
     # Project apps
+    'mayan.apps.announcements',
     'mayan.apps.motd',
     # Document apps
     'mayan.apps.cabinets',
@@ -109,6 +112,7 @@ INSTALLED_APPS = (
     'mayan.apps.document_signatures',
     'mayan.apps.document_states',
     'mayan.apps.documents',
+    'mayan.apps.duplicates',
     'mayan.apps.file_metadata',
     'mayan.apps.linking',
     'mayan.apps.mailer',
@@ -137,7 +141,7 @@ MIDDLEWARE = (
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django.middleware.locale.LocaleMiddleware',
-    'mayan.apps.common.middleware.timezone.TimezoneMiddleware',
+    'mayan.apps.locales.middleware.timezone.TimezoneMiddleware',
     'stronghold.middleware.LoginRequiredMiddleware',
     'mayan.apps.common.middleware.ajax_redirect.AjaxRedirect',
 )

@@ -1,4 +1,5 @@
-from django.db.models.signals import post_delete, post_migrate
+from django.apps import apps
+from django.db.models.signals import post_migrate
 from django.utils.translation import ugettext_lazy as _
 
 from mayan.apps.acls.classes import ModelPermission
@@ -11,7 +12,7 @@ from mayan.apps.common.classes import (
 )
 from mayan.apps.common.menus import (
     menu_facet, menu_list_facet, menu_main, menu_object, menu_return,
-    menu_secondary, menu_setup, menu_multi_item, menu_tools
+    menu_secondary, menu_setup, menu_multi_item
 )
 from mayan.apps.common.signals import signal_post_initial_setup
 from mayan.apps.converter.layers import layer_decorations
@@ -23,9 +24,6 @@ from mayan.apps.converter.permissions import (
 )
 from mayan.apps.dashboards.dashboards import dashboard_main
 from mayan.apps.events.classes import EventModelRegistry, ModelEventType
-from mayan.apps.events.links import (
-    link_events_for_object, link_object_event_types_user_subcriptions_list,
-)
 from mayan.apps.events.permissions import permission_events_view
 from mayan.apps.file_caching.links import link_cache_partition_purge
 from mayan.apps.file_caching.permissions import permission_cache_partition_purge
@@ -40,25 +38,45 @@ from .dashboard_widgets import (
     DashboardWidgetDocumentsPagesNewThisMonth, DashboardWidgetDocumentsTotal,
     DashboardWidgetDocumentsTypesTotal,
 )
+
+# Documents
+
 from .events import (
-    event_document_created, event_document_file_created,
-    event_document_file_deleted, event_document_file_downloaded,
-    event_document_file_edited, event_document_edited,
+    event_document_created, event_document_edited, event_document_viewed,
+    event_trashed_document_deleted, event_trashed_document_restored
+)
+
+# Document files
+
+from .events import (
+    event_document_file_created, event_document_file_deleted,
+    event_document_file_downloaded, event_document_file_edited
+)
+
+# Document types
+
+from .events import (
     event_document_type_changed, event_document_type_edited,
     event_document_type_quick_label_created,
     event_document_type_quick_label_deleted,
-    event_document_type_quick_label_edited,
-    event_document_version_created, event_document_version_deleted,
-    event_document_version_edited, event_document_version_page_created,
-    event_document_version_page_deleted, event_document_version_page_edited,
-    event_document_viewed
+    event_document_type_quick_label_edited
 )
+
+# Document versions
+
+from .events import (
+    event_document_version_created, event_document_version_deleted,
+    event_document_version_edited, event_document_version_exported,
+    event_document_version_page_created, event_document_version_page_deleted,
+    event_document_version_page_edited,
+)
+
 from .handlers import (
     handler_create_default_document_type,
     handler_create_document_file_page_image_cache,
-    handler_create_document_version_page_image_cache,
-    handler_remove_empty_duplicates_lists, handler_scan_duplicates_for
+    handler_create_document_version_page_image_cache
 )
+from .html_widgets import BaseDocumentThumbnailWidget
 from .links.document_links import (
     link_document_type_change, link_document_properties_edit,
     link_document_list, link_document_recently_accessed_list,
@@ -66,11 +84,12 @@ from .links.document_links import (
     link_document_preview, link_document_properties
 )
 from .links.document_file_links import (
-    link_document_file_delete, link_document_file_download_quick,
-    link_document_file_edit, link_document_file_list,
-    link_document_file_preview, link_document_file_print_form,
-    link_document_file_properties, link_document_file_return_to_document,
-    link_document_file_return_list, link_document_file_transformations_clear,
+    link_document_file_delete, link_document_file_delete_multiple,
+    link_document_file_download_quick, link_document_file_edit,
+    link_document_file_list, link_document_file_preview,
+    link_document_file_print_form, link_document_file_properties,
+    link_document_file_return_to_document, link_document_file_return_list,
+    link_document_file_transformations_clear,
     link_document_file_multiple_transformations_clear,
     link_document_file_transformations_clone
 )
@@ -122,10 +141,6 @@ from .links.document_version_page_links import (
     link_document_version_page_rotate_right, link_document_version_page_view,
     link_document_version_page_view_reset,
     link_document_version_page_zoom_in, link_document_version_page_zoom_out
-)
-from .links.duplicated_document_links import (
-    link_document_duplicates_list, link_duplicated_document_list,
-    link_duplicated_document_scan
 )
 from .links.favorite_links import (
     link_document_favorites_add, link_document_favorites_remove,
@@ -179,12 +194,7 @@ from .permissions import (
     permission_trashed_document_delete, permission_trashed_document_restore
 )
 
-from .signals import signal_post_document_file_upload
 from .statistics import *  # NOQA
-from .widgets import (
-    BaseDocumentThumbnailWidget, widget_document_file_page_number,
-    widget_document_page_number, widget_document_version_page_number
-)
 
 
 class DocumentsApp(MayanAppConfig):
@@ -207,6 +217,9 @@ class DocumentsApp(MayanAppConfig):
         DocumentFileSearchResult = self.get_model(
             model_name='DocumentFileSearchResult'
         )
+        DocumentFilePageSearchResult = self.get_model(
+            model_name='DocumentFilePageSearchResult'
+        )
         DocumentType = self.get_model(model_name='DocumentType')
         DocumentTypeFilename = self.get_model(
             model_name='DocumentTypeFilename'
@@ -219,7 +232,9 @@ class DocumentsApp(MayanAppConfig):
         DocumentVersionPageSearchResult = self.get_model(
             model_name='DocumentVersionPageSearchResult'
         )
-        DuplicatedDocument = self.get_model(model_name='DuplicatedDocument')
+        DownloadFile = apps.get_model(
+            app_label='storage', model_name='DownloadFile'
+        )
         FavoriteDocument = self.get_model(
             model_name='FavoriteDocument'
         )
@@ -240,6 +255,8 @@ class DocumentsApp(MayanAppConfig):
             layer=layer_decorations
         )
         link_decorations_list.text = _('Decorations')
+
+        DownloadFile.objects.register_content_object(model=Document)
 
         DynamicSerializerField.add_serializer(
             klass=Document,
@@ -296,7 +313,7 @@ class DocumentsApp(MayanAppConfig):
             model=Document, event_types=(
                 event_document_edited, event_document_type_changed,
                 event_document_file_deleted, event_document_version_deleted,
-                event_document_viewed
+                event_document_viewed, event_trashed_document_restored
             )
         )
         ModelEventType.register(
@@ -309,7 +326,8 @@ class DocumentsApp(MayanAppConfig):
             model=DocumentType, event_types=(
                 event_document_created,
                 event_document_type_edited,
-                event_document_type_quick_label_created
+                event_document_type_quick_label_created,
+                event_trashed_document_deleted
             )
         )
         ModelEventType.register(
@@ -322,6 +340,7 @@ class DocumentsApp(MayanAppConfig):
             model=DocumentVersion, event_types=(
                 event_document_version_created,
                 event_document_version_edited,
+                event_document_version_exported,
                 event_document_version_page_created
             )
         )
@@ -496,50 +515,48 @@ class DocumentsApp(MayanAppConfig):
             field_name='document'
         )
 
-        # Document file and document file page thumbnail widget
-        # Document version and document version page thumbnail widget
-        thumbnail_widget = BaseDocumentThumbnailWidget()
-
         # Document
 
         SourceColumn(
-            attribute='label', is_object_absolute_url=True, is_identifier=True,
-            is_sortable=True, source=Document
+            attribute='get_label', is_object_absolute_url=True,
+            is_identifier=True, is_sortable=True, sort_field='label',
+            source=Document
         )
         SourceColumn(
-            func=lambda context: thumbnail_widget.render(
-                instance=context['object']
-            ), html_extra_classes='text-center document-thumbnail-list',
-            label=_('Thumbnail'), source=Document
+            html_extra_classes='text-center document-thumbnail-list',
+            label=_('Thumbnail'), order=-99, source=Document,
+            widget=BaseDocumentThumbnailWidget
         )
+
+        ########
         ##TEMP
+        ##TODO:REMOVE
+        #######
         SourceColumn(
-            func=lambda context: 'Files: {}'.format(context['object'].files.count()),
-            label=_('Files'), source=Document
+            func=lambda context: context['object'].files.count(),
+            include_label=True, label=_('Files'), source=Document
         )
         SourceColumn(
-            func=lambda context: 'Versions: {}'.format(context['object'].versions.count()),
-            label=_('Versions'), source=Document
+            func=lambda context: context['object'].versions.count(),
+            include_label=True, label=_('Versions'), source=Document
         )
         SourceColumn(
             func=lambda context: context['object'].is_stub,
-            label=_('Is stub'), source=Document
-        )
-        ##TEMP
-        SourceColumn(
-            attribute='document_type', is_sortable=True, source=Document,
-        )
-        SourceColumn(
-            func=lambda context: widget_document_page_number(
-                document=context['object']
-            ), label=_('Pages'), source=Document
+            include_label=True, label=_('Is stub'), source=Document
         )
 
+        ###########
+        ##TEMP -end
+        ##TODO:REMOVE
+        ###########
+
         SourceColumn(
-            func=lambda context: DuplicatedDocument.objects.get(
-                document=context['object']
-            ).documents.count(), include_label=True, label=_('Duplicates'),
-            source=Document, views=('documents:duplicated_document_list',)
+            attribute='document_type', include_label=True, is_sortable=True,
+            label=_('Type'), order=-9, source=Document,
+        )
+        SourceColumn(
+            func=lambda context: context['object'].pages.count(),
+            label=_('Pages'), include_label=True, order=-8, source=Document
         )
 
         # RecentlyCreatedDocument
@@ -556,24 +573,26 @@ class DocumentsApp(MayanAppConfig):
             is_object_absolute_url=True
         )
         SourceColumn(
-            func=lambda context: thumbnail_widget.render(
-                instance=context['object']
-            ), html_extra_classes='text-center document-thumbnail-list',
-            label=_('Thumbnail'), source=DocumentFile
+            html_extra_classes='text-center document-thumbnail-list',
+            label=_('Thumbnail'), order=-99, source=DocumentFile,
+            widget=BaseDocumentThumbnailWidget
         )
         SourceColumn(
-            func=lambda context: widget_document_file_page_number(
-                document_file=context['object']
-            ), label=_('Pages'), source=DocumentFile
+            func=lambda context: context['object'].pages.count(),
+            include_label=True, label=_('Pages'), order=-6,
+            source=DocumentFile
         )
         SourceColumn(
-            attribute='mimetype', is_sortable=True, source=DocumentFile
+            attribute='comment', is_sortable=True, order=-7,
+            source=DocumentFile
         )
         SourceColumn(
-            attribute='encoding', is_sortable=True, source=DocumentFile
+            attribute='encoding', include_label=True, is_sortable=True,
+            order=-8, source=DocumentFile
         )
         SourceColumn(
-            attribute='comment', is_sortable=True, source=DocumentFile
+            attribute='mimetype', include_label=True, is_sortable=True,
+            order=-9, source=DocumentFile
         )
 
         # DocumentFilePage
@@ -583,10 +602,9 @@ class DocumentsApp(MayanAppConfig):
             is_object_absolute_url=True, source=DocumentFilePage,
         )
         SourceColumn(
-            func=lambda context: thumbnail_widget.render(
-                instance=context['object']
-            ), html_extra_classes='text-center document-thumbnail-list',
-            label=_('Thumbnail'), source=DocumentFilePage
+            html_extra_classes='text-center document-thumbnail-list',
+            label=_('Thumbnail'), order=-99, source=DocumentFilePage,
+            widget=BaseDocumentThumbnailWidget
         )
 
         # DocumentType
@@ -618,23 +636,22 @@ class DocumentsApp(MayanAppConfig):
             is_object_absolute_url=True
         )
         SourceColumn(
-            func=lambda context: thumbnail_widget.render(
-                instance=context['object']
-            ), html_extra_classes='text-center document-thumbnail-list',
-            label=_('Thumbnail'), source=DocumentVersion
+            html_extra_classes='text-center document-thumbnail-list',
+            label=_('Thumbnail'), order=-99, source=DocumentVersion,
+            widget=BaseDocumentThumbnailWidget
         )
         SourceColumn(
-            func=lambda context: widget_document_version_page_number(
-                document_version=context['object']
-            ), label=_('Pages'), source=DocumentVersion
+            func=lambda context: context['object'].pages.count(),
+            include_label=True, label=_('Pages'), order=-8,
+            source=DocumentVersion
         )
         SourceColumn(
             attribute='active', include_label=True, is_sortable=True,
-            source=DocumentVersion, widget=TwoStateWidget
+            order=-9, source=DocumentVersion, widget=TwoStateWidget
         )
         SourceColumn(
             attribute='comment', include_label=True, is_sortable=True,
-            source=DocumentVersion
+            order=-7, source=DocumentVersion
         )
 
         # DocumentVersionPage
@@ -644,10 +661,9 @@ class DocumentsApp(MayanAppConfig):
             is_object_absolute_url=True, source=DocumentVersionPage,
         )
         SourceColumn(
-            func=lambda context: thumbnail_widget.render(
-                instance=context['object']
-            ), html_extra_classes='text-center document-thumbnail-list',
-            label=_('Thumbnail'), source=DocumentVersionPage
+            html_extra_classes='text-center document-thumbnail-list',
+            label=_('Thumbnail'), order=-99, source=DocumentVersionPage,
+            widget=BaseDocumentThumbnailWidget
         )
 
         # TrashedDocument
@@ -684,23 +700,18 @@ class DocumentsApp(MayanAppConfig):
             links=(
                 link_document_recently_accessed_list,
                 link_document_recently_created_list, link_document_list_favorites,
-                link_document_list, link_document_list_deleted,
-                link_duplicated_document_list,
+                link_document_list, link_document_list_deleted
             )
         )
 
         menu_main.bind_links(links=(menu_documents,), position=0)
 
         menu_setup.bind_links(links=(link_document_type_setup,))
-        menu_tools.bind_links(
-            links=(link_duplicated_document_scan,)
-        )
 
         # Document
 
         menu_facet.bind_links(
-            links=(link_document_duplicates_list, link_acl_list,),
-            sources=(Document,)
+            links=(link_acl_list,), sources=(Document,)
         )
         menu_facet.bind_links(
             links=(link_document_preview,), sources=(Document,), position=0
@@ -710,8 +721,6 @@ class DocumentsApp(MayanAppConfig):
         )
         menu_facet.bind_links(
             links=(
-                link_events_for_object,
-                link_object_event_types_user_subcriptions_list,
                 link_document_file_list, link_document_version_list
             ), sources=(Document,), position=2
         )
@@ -730,7 +739,7 @@ class DocumentsApp(MayanAppConfig):
                 link_document_multiple_favorites_remove,
                 link_document_multiple_trash,
                 link_document_multiple_type_change
-            ), sources=(Document, DocumentSearchResult)
+            ), sources=(Document,)
         )
 
         menu_secondary.bind_links(
@@ -746,16 +755,15 @@ class DocumentsApp(MayanAppConfig):
         menu_list_facet.bind_links(
             links=(
                 link_document_file_page_list, link_document_file_properties,
-                link_document_file_preview,
-                link_acl_list, link_object_event_types_user_subcriptions_list,
-                link_events_for_object
+                link_document_file_preview, link_acl_list
             ), sources=(DocumentFile,)
         )
         menu_multi_item.bind_links(
             links=(
+                link_document_file_delete_multiple,
                 link_document_file_multiple_page_count_update,
                 link_document_file_multiple_transformations_clear,
-            ), sources=(DocumentFile, DocumentFileSearchResult)
+            ), sources=(DocumentFile,)
         )
         menu_object.bind_links(
             links=(
@@ -815,9 +823,7 @@ class DocumentsApp(MayanAppConfig):
             links=(
                 link_document_type_filename_list,
                 link_document_type_policies,
-                link_document_type_filename_generator,
-                link_acl_list, link_object_event_types_user_subcriptions_list,
-                link_events_for_object,
+                link_document_type_filename_generator, link_acl_list
             ), sources=(DocumentType,)
         )
 
@@ -857,9 +863,8 @@ class DocumentsApp(MayanAppConfig):
 
         menu_list_facet.bind_links(
             links=(
-                link_document_version_page_list, link_document_version_preview,
-                link_acl_list, link_object_event_types_user_subcriptions_list,
-                link_events_for_object
+                link_document_version_page_list,
+                link_document_version_preview, link_acl_list
             ),
             sources=(DocumentVersion,)
         )
@@ -867,7 +872,7 @@ class DocumentsApp(MayanAppConfig):
             links=(
                 link_document_version_multiple_delete,
                 link_document_version_multiple_transformations_clear,
-            ), sources=(DocumentVersion, DocumentVersionSearchResult)
+            ), sources=(DocumentVersion,)
         )
         menu_object.bind_links(
             links=(
@@ -936,18 +941,28 @@ class DocumentsApp(MayanAppConfig):
             links=(link_document_restore, link_document_delete),
             sources=(TrashedDocument,)
         )
-        menu_multi_item.add_proxy_exclusion(source=TrashedDocument)
         menu_multi_item.bind_links(
             links=(
                 link_document_multiple_restore, link_document_multiple_delete
             ), sources=(TrashedDocument,)
         )
 
-        post_delete.connect(
-            dispatch_uid='documents_handler_remove_empty_duplicates_lists',
-            receiver=handler_remove_empty_duplicates_lists,
-            sender=Document
-        )
+        # RecentlyAccessedDocument
+
+        menu_multi_item.add_proxy_inclusions(source=RecentlyAccessedDocument)
+
+        # RecentlyCreatedDocument
+
+        menu_multi_item.add_proxy_inclusions(source=RecentlyCreatedDocument)
+
+        # Search proxies
+
+        menu_multi_item.add_proxy_inclusions(source=DocumentSearchResult)
+        menu_multi_item.add_proxy_inclusions(source=DocumentFileSearchResult)
+        menu_multi_item.add_proxy_inclusions(source=DocumentFilePageSearchResult)
+        menu_multi_item.add_proxy_inclusions(source=DocumentVersionSearchResult)
+        menu_multi_item.add_proxy_inclusions(source=DocumentVersionPageSearchResult)
+
         post_migrate.connect(
             dispatch_uid='documents_handler_create_document_file_page_image_cache',
             receiver=handler_create_document_file_page_image_cache,
@@ -959,8 +974,4 @@ class DocumentsApp(MayanAppConfig):
         signal_post_initial_setup.connect(
             dispatch_uid='documents_handler_create_default_document_type',
             receiver=handler_create_default_document_type
-        )
-        signal_post_document_file_upload.connect(
-            dispatch_uid='documents_handler_scan_duplicates_for',
-            receiver=handler_scan_duplicates_for
         )

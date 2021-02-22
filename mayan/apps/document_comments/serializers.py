@@ -15,23 +15,24 @@ class CommentSerializer(serializers.HyperlinkedModelSerializer):
 
     class Meta:
         fields = (
-            'comment', 'document', 'document_comments_url', 'id',
-            'submit_date', 'url', 'user'
+            'document', 'document_comments_url', 'id', 'submit_date',
+            'text', 'url', 'user'
         )
         model = Comment
 
     def get_document_comments_url(self, instance):
         return reverse(
-            'rest_api:comment-list', args=(
-                instance.document_id,
-            ), request=self.context['request'], format=self.context['format']
+            viewname='rest_api:comment-list', kwargs={
+                'document_id': instance.document_id,
+            }, request=self.context['request'], format=self.context['format']
         )
 
     def get_url(self, instance):
         return reverse(
-            'rest_api:comment-detail', args=(
-                instance.document_id, instance.pk
-            ), request=self.context['request'], format=self.context['format']
+            viewname='rest_api:comment-detail', kwargs={
+                'document_id': instance.document_id,
+                'comment_id': instance.pk
+            }, request=self.context['request'], format=self.context['format']
         )
 
 
@@ -43,8 +44,8 @@ class WritableCommentSerializer(serializers.ModelSerializer):
 
     class Meta:
         fields = (
-            'comment', 'document', 'document_comments_url', 'id',
-            'submit_date', 'url', 'user'
+            'document', 'document_comments_url', 'id', 'submit_date',
+            'text', 'url', 'user'
         )
         model = Comment
         read_only_fields = ('document',)
@@ -56,14 +57,15 @@ class WritableCommentSerializer(serializers.ModelSerializer):
 
     def get_document_comments_url(self, instance):
         return reverse(
-            'rest_api:comment-list', args=(
-                instance.document_id,
-            ), request=self.context['request'], format=self.context['format']
+            viewname='rest_api:comment-list', kwargs={
+                'document_id': instance.document_id,
+            }, request=self.context['request'], format=self.context['format']
         )
 
     def get_url(self, instance):
         return reverse(
-            'rest_api:comment-detail', args=(
-                instance.document_id, instance.pk
-            ), request=self.context['request'], format=self.context['format']
+            viewname='rest_api:comment-detail', kwargs={
+                'document_id': instance.document_id,
+                'comment_id': instance.pk
+            }, request=self.context['request'], format=self.context['format']
         )

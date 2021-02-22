@@ -139,7 +139,7 @@ class SignatureTestMixin:
         with open(file=TEST_SIGNATURE_FILE_PATH, mode='rb') as file_object:
             self.test_signature = DetachedSignature.objects.create(
                 document_file=self.test_document.file_latest,
-                signature_file=File(file_object)
+                signature_file=File(file=file_object)
             )
 
 
@@ -163,6 +163,13 @@ class SignatureViewTestMixin:
             kwargs={
                 'document_file_id': self.test_document.file_latest.pk
             }
+        )
+
+
+class SignatureToolsViewTestMixin:
+    def _request_all_test_document_file_signature_refresh_view(self):
+        return self.post(
+            viewname='signatures:all_document_file_signature_refresh'
         )
 
     def _request_all_test_document_file_signature_verify_view(self):

@@ -1,11 +1,15 @@
 from rest_framework import generics as rest_framework_generics
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.settings import api_settings
 
-from .filters import MayanObjectPermissionsFilter
-from .mixins import (
+from .api_view_mixins import (
     InstanceExtraDataAPIViewMixin, SerializerExtraContextAPIViewMixin,
     SchemaInspectionAPIViewMixin
 )
+from .filters import MayanObjectPermissionsFilter
 from .permissions import MayanPermission
+from .serializers import BlankSerializer
 
 
 class GenericAPIView(
@@ -53,6 +57,43 @@ class ListCreateAPIView(
     """
     filter_backends = (MayanObjectPermissionsFilter,)
     permission_classes = (MayanPermission,)
+
+
+class ObjectActionAPIView(GenericAPIView):
+    serializer_class = BlankSerializer
+
+    def get_success_headers(self, data):
+        try:
+            return {'Location': str(data[api_settings.URL_FIELD_NAME])}
+        except (TypeError, KeyError):
+            return {}
+
+    def object_action(self, serializer):
+        raise NotImplementedError
+
+    def post(self, request, *args, **kwargs):
+        return self.view_action(request, *args, **kwargs)
+
+    def view_action(self, request, *args, **kwargs):
+        self.object = self.get_object()
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        if hasattr(self, 'get_instance_extra_data'):
+            for key, value in self.get_instance_extra_data().items():
+                setattr(self.object, key, value)
+
+        result = self.object_action(request=request, serializer=serializer)
+
+        if result:
+            # If object action returned serializer.data
+            headers = self.get_success_headers(data=result)
+            return Response(
+                data=result, status=status.HTTP_200_OK, headers=headers
+            )
+        else:
+            return Response(status=status.HTTP_200_OK)
 
 
 class RetrieveAPIView(

@@ -10,7 +10,7 @@ from mayan.apps.documents.literals import DOCUMENT_FILE_ACTION_PAGES_NEW
 from mayan.apps.documents.models.document_models import Document
 from mayan.apps.documents.models.document_file_models import DocumentFile
 from mayan.apps.documents.permissions import permission_document_file_new
-from mayan.apps.views.mixins import ExternalObjectMixin
+from mayan.apps.views.mixins import ExternalObjectViewMixin
 
 from ..forms import NewDocumentFileForm
 from ..models import Source
@@ -21,7 +21,9 @@ __all__ = ('DocumentFileUploadInteractiveView',)
 logger = logging.getLogger(name=__name__)
 
 
-class DocumentFileUploadInteractiveView(ExternalObjectMixin, UploadBaseView):
+class DocumentFileUploadInteractiveView(
+    ExternalObjectViewMixin, UploadBaseView
+):
     document_form = NewDocumentFileForm
     external_object_class = Document
     external_object_permission = permission_document_file_new

@@ -58,12 +58,13 @@ def save_metadata(metadata_dict, document, create=False, _user=None):
     }
 
     if create:
-        # Use matched metadata now to create document metadata
+        # Use matched metadata now to create document metadata.
         try:
             DocumentMetadata.objects.get(**parameters)
         except DocumentMetadata.DoesNotExist:
             document_metadata = DocumentMetadata(**parameters)
-            document_metadata.save(_user=_user)
+            document_metadata._event_actior = _user
+            document_metadata.save()
     else:
         try:
             document_metadata = DocumentMetadata.objects.get(
@@ -73,12 +74,12 @@ def save_metadata(metadata_dict, document, create=False, _user=None):
                 ),
             )
         except DocumentMetadata.DoesNotExist:
-            # TODO: Maybe return warning to caller?
             document_metadata = None
 
     if document_metadata:
         document_metadata.value = metadata_dict['value']
-        document_metadata.save(_user=_user)
+        document_metadata._event_actior = _user
+        document_metadata.save()
 
 
 def metadata_repr(metadata_list):

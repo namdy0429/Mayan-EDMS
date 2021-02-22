@@ -1,19 +1,120 @@
+import csv
 import logging
+
+from furl import furl
 
 from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
+from django.urls import reverse
 from django.utils.encoding import force_text
 from django.utils.translation import ugettext_lazy as _
 
 from actstream import action
 
+from mayan.apps.common.menus import menu_list_facet
+from mayan.apps.common.settings import setting_project_url
 from mayan.apps.common.utils import return_attrib
 
-from .literals import EVENT_MANAGER_ORDER_AFTER
-from .permissions import permission_events_view
+from .literals import (
+    DEFAULT_EVENT_LIST_EXPORT_FILENAME, EVENT_MANAGER_ORDER_AFTER
+)
+from .links import (
+    link_events_for_object, link_object_event_types_user_subcriptions_list
+)
+from .permissions import permission_events_export, permission_events_view
 
 logger = logging.getLogger(name=__name__)
+
+
+DEFAULT_ACTION_EXPORTER_FIELD_NAMES = (
+    'timestamp', 'id', 'actor_content_type', 'actor_object_id', 'actor',
+    'target_content_type', 'target_object_id', 'target', 'verb',
+    'action_object_content_type', 'action_object_object_id', 'action_object'
+)
+
+
+class ActionExporter:
+    def __init__(self, queryset, field_names=None):
+        self.field_names = field_names or DEFAULT_ACTION_EXPORTER_FIELD_NAMES
+        self.queryset = queryset
+
+    def export(self, file_object, user=None):
+        AccessControlList = apps.get_model(
+            app_label='acls', model_name='AccessControlList'
+        )
+        if user:
+            self.queryset = AccessControlList.objects.restrict_queryset(
+                queryset=self.queryset,
+                permission=permission_events_export,
+                user=user
+            )
+
+        writer = csv.writer(
+            file_object, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL
+        )
+        file_object.write(','.join(self.field_names + ('\n',)))
+
+        for entry in self.queryset.iterator():
+            row = [
+                str(
+                    getattr(entry, field_name)
+                ) for field_name in self.field_names
+            ]
+            writer.writerow(row)
+
+    def export_to_download_file(self, user=None):
+        # Avoid circular import
+        from .events import event_events_exported
+
+        DownloadFile = apps.get_model(
+            app_label='storage', model_name='DownloadFile'
+        )
+        Message = apps.get_model(
+            app_label='messaging', model_name='Message'
+        )
+
+        download_file = DownloadFile(
+            filename=DEFAULT_EVENT_LIST_EXPORT_FILENAME,
+            label=_('Event list export to CSV'),
+            permission=permission_events_export.stored_permission
+        )
+        download_file._event_actor = user
+        download_file.save()
+
+        with download_file.open(mode='w') as file_object:
+            self.export(file_object=file_object, user=user)
+
+        event_events_exported.commit(
+            actor=user, target=download_file
+        )
+
+        if user:
+            download_list_url = furl(setting_project_url.value).join(
+                reverse(
+                    viewname='storage:download_file_list'
+                )
+            ).tostr()
+            download_url = furl(setting_project_url.value).join(
+                reverse(
+                    viewname='storage:download_file_download',
+                    kwargs={'download_file_id': download_file.pk}
+                )
+            ).tostr()
+
+            Message.objects.create(
+                sender_object=download_file,
+                user=user,
+                subject=_('Events exported.'),
+                body=_(
+                    'The event list has been exported and is available '
+                    'for download using the link: %(download_url)s or from '
+                    'the downloads area (%(download_list_url)s).'
+                ) % {
+                    'download_list_url': download_list_url,
+                    'download_url': download_url,
+                }
+            )
 
 
 class EventManager:
@@ -22,6 +123,7 @@ class EventManager:
 
     def __init__(self, instance, **kwargs):
         self.instance = instance
+        self.instance_event_attributes = {}
         self.kwargs = kwargs
 
     def commit(self):
@@ -49,22 +151,25 @@ class EventManager:
         return result
 
     def pop_event_attributes(self):
-        self.instance_event_attributes = {}
-
         for attribute in self.EVENT_ATTRIBUTES:
-            full_name = '_event_{}'.format(attribute)
-            value = self.instance.__dict__.pop(full_name, None)
-            self.instance_event_attributes[attribute] = value
+            # If the attribute is not set or is set but is None.
+            if not self.instance_event_attributes.get(attribute, None):
+                full_name = '_event_{}'.format(attribute)
+                value = self.instance.__dict__.pop(full_name, None)
+                self.instance_event_attributes[attribute] = value
 
         keep_attributes = self.instance_event_attributes['keep_attributes'] or ()
 
         for attribute in self.EVENT_ARGUMENTS:
-            full_name = '_event_{}'.format(attribute)
-            if full_name in keep_attributes:
-                value = self.instance.__dict__.get(full_name, None)
-            else:
-                value = self.instance.__dict__.pop(full_name, None)
-            self.instance_event_attributes[attribute] = value
+            # If the attribute is not set or is set but is None.
+            if not self.instance_event_attributes.get(attribute, None):
+                full_name = '_event_{}'.format(attribute)
+                if full_name in keep_attributes:
+                    value = self.instance.__dict__.get(full_name, None)
+                else:
+                    value = self.instance.__dict__.pop(full_name, None)
+
+                self.instance_event_attributes[attribute] = value
 
     def prepare(self):
         """Optional method to gather information before the actual commit"""
@@ -98,9 +203,19 @@ class EventManagerSave(EventManager):
 
 class EventModelRegistry:
     @staticmethod
-    def register(model):
+    def register(model, bind_links=True, menu=None):
         from actstream import registry
         registry.register(model)
+
+        if bind_links:
+            menu = menu or menu_list_facet
+
+            menu.bind_links(
+                links=(
+                    link_events_for_object,
+                    link_object_event_types_user_subcriptions_list
+                ), sources=(model,)
+            )
 
 
 class EventTypeNamespace:
@@ -160,7 +275,7 @@ class EventType:
     def refresh(cls):
         for event_type in cls.all():
             # Invalidate cache and recreate store events while repopulating
-            # cache
+            # cache.
             event_type.stored_event_type = None
             event_type.get_stored_event_type()
 
@@ -178,90 +293,100 @@ class EventType:
         AccessControlList = apps.get_model(
             app_label='acls', model_name='AccessControlList'
         )
-        Action = apps.get_model(
-            app_label='actstream', model_name='Action'
-        )
-        ContentType = apps.get_model(
-            app_label='contenttypes', model_name='ContentType'
+        EventSubscription = apps.get_model(
+            app_label='events', model_name='EventSubscription'
         )
         Notification = apps.get_model(
             app_label='events', model_name='Notification'
         )
+        ObjectEventSubscription = apps.get_model(
+            app_label='events', model_name='ObjectEventSubscription'
+        )
+        User = get_user_model()
 
-        results = action.send(
+        if actor is None and target is None:
+            # If the actor and the target are None there is no way to
+            # create a new event.
+            logger.warning(
+                'Attempting to commit event "%s" without an actor or a '
+                'target. This is not yet supported.', self
+            )
+            return
+
+        result = action.send(
             actor or target, actor=actor, verb=self.id,
             action_object=action_object, target=target
+        )[0][1]
+        # The [0][1] means: get the first and only action from the list
+        # and ignore the handler.
+
+        # Create notifications for the actions created by the event committed.
+
+        # Gather the users subscribed globally to the event.
+        user_queryset = User.objects.filter(
+            id__in=EventSubscription.objects.filter(
+                stored_event_type__name=result.verb
+            ).values('user')
         )
 
-        for handler, result in results:
-            if isinstance(result, Action):
-                for user in get_user_model().objects.all():
-                    notification = None
+        # Gather the users subscribed to the target object event.
+        if result.target:
+            user_queryset = user_queryset | User.objects.filter(
+                id__in=ObjectEventSubscription.objects.filter(
+                    content_type=result.target_content_type,
+                    object_id=result.target.pk,
+                    stored_event_type__name=result.verb
+                ).values('user')
+            )
 
-                    if user.event_subscriptions.filter(stored_event_type__name=result.verb).exists():
-                        if result.target:
-                            try:
-                                AccessControlList.objects.check_access(
-                                    obj=result.target,
-                                    permissions=(permission_events_view,),
-                                    user=user
-                                )
-                            except PermissionDenied:
-                                pass
-                            else:
-                                notification, created = Notification.objects.get_or_create(
-                                    action=result, user=user
-                                )
-                        else:
-                            notification, created = Notification.objects.get_or_create(
-                                action=result, user=user
-                            )
+        # Gather the users subscribed to the action object event.
+        if result.action_object:
+            user_queryset = user_queryset | User.objects.filter(
+                id__in=ObjectEventSubscription.objects.filter(
+                    content_type=result.action_object_content_type,
+                    object_id=result.action_object.pk,
+                    stored_event_type__name=result.verb
+                ).values('user')
+            )
 
-                    if result.target:
-                        content_type = ContentType.objects.get_for_model(model=result.target)
+        for user in user_queryset:
+            if result.target:
+                try:
+                    AccessControlList.objects.check_access(
+                        obj=result.target,
+                        permissions=(permission_events_view,),
+                        user=user
+                    )
+                except PermissionDenied:
+                    """
+                    User is subscribed to the event but does
+                    not have permissions for the event's target.
+                    """
+                else:
+                    Notification.objects.create(action=result, user=user)
+                    # Don't check or add any other notification for the
+                    # same user-event-object.
+                    continue
 
-                        relationship = user.object_subscriptions.filter(
-                            content_type=content_type,
-                            object_id=result.target.pk,
-                            stored_event_type__name=result.verb
-                        )
+            if result.action_object:
+                try:
+                    AccessControlList.objects.check_access(
+                        obj=result.action_object,
+                        permissions=(permission_events_view,),
+                        user=user
+                    )
+                except PermissionDenied:
+                    """
+                    User is subscribed to the event but does
+                    not have permissions for the event's action_object.
+                    """
+                else:
+                    Notification.objects.create(action=result, user=user)
+                    # Don't check or add any other notification for the
+                    # same user-event-object.
+                    continue
 
-                        if relationship.exists():
-                            try:
-                                AccessControlList.objects.check_access(
-                                    obj=result.target,
-                                    permissions=(permission_events_view,),
-                                    user=user
-                                )
-                            except PermissionDenied:
-                                pass
-                            else:
-                                notification, created = Notification.objects.get_or_create(
-                                    action=result, user=user
-                                )
-
-                    if not notification and result.action_object:
-                        content_type = ContentType.objects.get_for_model(model=result.action_object)
-
-                        relationship = user.object_subscriptions.filter(
-                            content_type=content_type,
-                            object_id=result.action_object.pk,
-                            stored_event_type__name=result.verb
-                        )
-
-                        if relationship.exists():
-                            try:
-                                AccessControlList.objects.check_access(
-                                    obj=result.action_object,
-                                    permissions=(permission_events_view,),
-                                    user=user
-                                )
-                            except PermissionDenied:
-                                pass
-                            else:
-                                notification, created = Notification.objects.get_or_create(
-                                    action=result, user=user
-                                )
+        return result
 
     def get_stored_event_type(self):
         if not self.stored_event_type:

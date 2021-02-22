@@ -6,25 +6,42 @@ from .api_views import (
     APINotificationListView, APIObjectEventListView
 )
 from .views import (
-    CurrentUserEventListView, EventListView, EventTypeSubscriptionListView,
-    NotificationListView, NotificationMarkRead, NotificationMarkReadAll,
+    CurrentUserEventListView, CurrentUserEventExportView, EventListView,
+    EventListExportView, EventTypeSubscriptionListView, NotificationListView,
+    NotificationMarkRead, NotificationMarkReadAll, ObjectEventExportView,
     ObjectEventListView, ObjectEventTypeSubscriptionListView,
-    VerbEventListView
+    VerbEventExportView, VerbEventListView
 )
 
 urlpatterns_events = [
     url(regex=r'^events/$', name='events_list', view=EventListView.as_view()),
     url(
+        regex=r'^events/export/$', name='events_list_export',
+        view=EventListExportView.as_view()
+    ),
+    url(
         regex=r'^object/(?P<app_label>[-\w]+)/(?P<model_name>[-\w]+)/(?P<object_id>\d+)/events/$',
         name='events_for_object', view=ObjectEventListView.as_view()
+    ),
+    url(
+        regex=r'^object/(?P<app_label>[-\w]+)/(?P<model_name>[-\w]+)/(?P<object_id>\d+)/events/export/$',
+        name='events_for_object_export', view=ObjectEventExportView.as_view()
     ),
     url(
         regex=r'^verbs/(?P<verb>[\w\-\.]+)/$', name='events_by_verb',
         view=VerbEventListView.as_view(),
     ),
     url(
+        regex=r'^verbs/(?P<verb>[\w\-\.]+)/export/$', name='events_by_verb_export',
+        view=VerbEventExportView.as_view(),
+    ),
+    url(
         regex=r'^user/events/$', name='current_user_events',
         view=CurrentUserEventListView.as_view()
+    ),
+    url(
+        regex=r'^user/events/export/$', name='current_user_events_export',
+        view=CurrentUserEventExportView.as_view()
     ),
 ]
 

@@ -94,11 +94,11 @@ class MsgArchive(Archive):
 
     def member_contents(self, filename):
         if filename == 'message.txt':
-            return force_bytes(self._archive.body)
+            return force_bytes(s=self._archive.body)
 
         for member in self._archive.attachments:
             if member.longFilename == filename:
-                return force_bytes(member.data)
+                return force_bytes(s=member.data)
 
     def members(self):
         results = []
@@ -112,11 +112,11 @@ class MsgArchive(Archive):
 
     def open_member(self, filename):
         if filename == 'message.txt':
-            return BytesIO(force_bytes(self._archive.body))
+            return BytesIO(force_bytes(s=self._archive.body))
 
         for member in self._archive.attachments:
             if member.longFilename == filename:
-                return BytesIO(force_bytes(member.data))
+                return BytesIO(force_bytes(s=member.data))
 
 
 class TarArchive(Archive):
@@ -147,16 +147,6 @@ class ZipArchive(Archive):
         self._archive = zipfile.ZipFile(file_object)
 
     def add_file(self, file_object, filename):
-        # Remove the zinfo_or_arcname and bytes keyword arguments
-        # so that the writestr methods works on Python 2 and 3
-        # Python 2 syntax:
-        # ZipFile.writestr(zinfo_or_arcname, bytes[, compress_type])
-        # Python 3 syntax:
-        # ZipFile.writestr(
-        #    zinfo_or_arcname, data, compress_type=None, compresslevel=None
-        # )
-        # TODO: Change this to keyword arguments when the move to Python 3
-        # and Django 2.x is complete.
         self._archive.writestr(
             filename, file_object.read(), compress_type=COMPRESSION
         )

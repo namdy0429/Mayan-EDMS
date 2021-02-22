@@ -11,7 +11,7 @@ from mayan.apps.views.generics import (
     SingleObjectDynamicFormCreateView, SingleObjectDynamicFormEditView,
     SingleObjectListView
 )
-from mayan.apps.views.mixins import ExternalObjectMixin
+from mayan.apps.views.mixins import ExternalObjectViewMixin
 
 from .classes import MailerBackend
 from .forms import (
@@ -33,9 +33,9 @@ from .tasks import task_send_document
 class MailDocumentView(MultipleObjectFormActionView):
     as_attachment = True
     form_class = DocumentMailForm
-    model = Document
     object_permission = permission_mailing_send_document
     pk_url_kwarg = 'document_id'
+    source_queryset = Document.valid
     success_message = _('%(count)d document queued for email delivery')
     success_message_plural = _(
         '%(count)d documents queued for email delivery'
@@ -216,7 +216,7 @@ class UserMailerListView(SingleObjectListView):
         return {'fields': self.get_backend().fields}
 
 
-class UserMailerTestView(ExternalObjectMixin, FormView):
+class UserMailerTestView(ExternalObjectViewMixin, FormView):
     external_object_class = UserMailer
     external_object_permission = permission_user_mailer_use
     external_object_pk_url_kwarg = 'mailer_id'

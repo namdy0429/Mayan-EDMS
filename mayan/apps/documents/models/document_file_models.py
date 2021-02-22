@@ -10,7 +10,7 @@ from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 
 from mayan.apps.common.classes import ModelQueryFields
-from mayan.apps.common.mixins import ModelInstanceExtraDataAPIViewMixin
+from mayan.apps.common.model_mixins import ExtraDataModelMixin
 from mayan.apps.common.signals import signal_mayan_pre_save
 from mayan.apps.converter.classes import ConverterBase
 from mayan.apps.converter.exceptions import (
@@ -28,12 +28,14 @@ from ..events import (
 from ..literals import (
     STORAGE_NAME_DOCUMENT_FILE_PAGE_IMAGE_CACHE, STORAGE_NAME_DOCUMENT_FILES
 )
-from ..managers import DocumentFileManager
+from ..managers import DocumentFileManager, ValidDocumentFileManager
 from ..settings import setting_hash_block_size
-from ..signals import signal_post_document_created, signal_post_document_file_upload
+from ..signals import (
+    signal_post_document_created, signal_post_document_file_upload
+)
 
 from .document_models import Document
-from .mixins import ModelMixinHooks
+from .mixins import HooksModelMixin
 
 __all__ = ('DocumentFile', 'DocumentFileSearchResult')
 logger = logging.getLogger(name=__name__)
@@ -46,7 +48,7 @@ def upload_to(instance, filename):
 
 
 class DocumentFile(
-    ModelInstanceExtraDataAPIViewMixin, ModelMixinHooks, models.Model
+    ExtraDataModelMixin, HooksModelMixin, models.Model
 ):
     """
     Model that describes a document file and its properties
@@ -118,6 +120,7 @@ class DocumentFile(
         verbose_name_plural = _('Document files')
 
     objects = DocumentFileManager()
+    valid = ValidDocumentFileManager()
 
     @staticmethod
     def hash_function():
@@ -197,7 +200,7 @@ class DocumentFile(
 
                     hash_object.update(data)
 
-            self.checksum = force_text(hash_object.hexdigest())
+            self.checksum = force_text(s=hash_object.hexdigest())
             if save:
                 self.save()
 
@@ -355,13 +358,6 @@ class DocumentFile(
             else:
                 return file_object
 
-    @property
-    def page_count(self):
-        """
-        The number of pages that the document posses.
-        """
-        return self.pages.count()
-
     def page_count_update(self, save=True):
         try:
             with self.open() as file_object:
@@ -436,6 +432,7 @@ class DocumentFile(
                     )
                     self.checksum_update(save=False)
                     self.mimetype_update(save=False)
+                    self._event_actor = user
                     self.save()
                     self.page_count_update(save=False)
 
@@ -446,7 +443,7 @@ class DocumentFile(
 
                     self.document.is_stub = False
                     if not self.document.label:
-                        self.document.label = force_text(self.file)
+                        self.document.label = force_text(s=self.file)
 
                     self.document._event_ignore = True
                     self.document.save()

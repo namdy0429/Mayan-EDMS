@@ -7,7 +7,7 @@ from django.utils.translation import ugettext_lazy as _
 from mayan.apps.acls.classes import ModelPermission
 from mayan.apps.common.apps import MayanAppConfig
 from mayan.apps.common.menus import (
-    menu_facet, menu_list_facet, menu_object, menu_secondary, menu_tools
+    menu_list_facet, menu_object, menu_secondary, menu_tools
 )
 from mayan.apps.navigation.classes import SourceColumn
 
@@ -18,6 +18,7 @@ from .hooks import (
     hook_create_embedded_signature, hook_decrypt_document_file
 )
 from .links import (
+    link_document_file_all_signature_refresh,
     link_document_file_all_signature_verify,
     link_document_file_signature_delete,
     link_document_file_signature_detached_create,
@@ -91,32 +92,27 @@ class DocumentSignaturesApp(MayanAppConfig):
         )
 
         SourceColumn(
-            source=SignatureBaseModel, label=_('Date'), attribute='date'
+            attribute='date_time', label=_('Date and time'),
+            source=SignatureBaseModel
         )
         SourceColumn(
-            source=SignatureBaseModel, label=_('Key ID'),
-            attribute='get_key_id'
+            attribute='get_key_id', label=_('Key ID'),
+            source=SignatureBaseModel
         )
         SourceColumn(
-            source=SignatureBaseModel, label=_('Signature ID'),
-            func=lambda context: context['object'].signature_id or _('None')
+            func=lambda context: context['object'].signature_id or _('None'),
+            label=_('Signature ID'), source=SignatureBaseModel
         )
         SourceColumn(
-            source=SignatureBaseModel, label=_('Type'),
             func=lambda context: SignatureBaseModel.objects.get_subclass(
                 pk=context['object'].pk
-            ).get_signature_type_display()
+            ).get_signature_type_display(), label=_('Type'),
+            source=SignatureBaseModel
         )
 
         menu_list_facet.bind_links(
             links=(link_document_file_signature_list,),
             sources=(DocumentFile,)
-        )
-        menu_object.bind_links(
-            links=(
-                link_document_file_signature_detached_create,
-                link_document_file_signature_embedded_create
-            ), sources=(DocumentFile,)
         )
         menu_object.bind_links(
             links=(
@@ -127,11 +123,16 @@ class DocumentSignaturesApp(MayanAppConfig):
         )
         menu_secondary.bind_links(
             links=(
-                link_document_file_signature_upload,
+                link_document_file_signature_detached_create,
+                link_document_file_signature_embedded_create,
+                link_document_file_signature_upload
             ), sources=(DocumentFile,)
         )
         menu_tools.bind_links(
-            links=(link_document_file_all_signature_verify,)
+            links=(
+                link_document_file_all_signature_refresh,
+                link_document_file_all_signature_verify,
+            )
         )
 
         post_delete.connect(

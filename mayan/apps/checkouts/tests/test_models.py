@@ -1,9 +1,5 @@
-import time
-
 from mayan.apps.documents.tests.base import GenericDocumentTestCase
 from mayan.apps.documents.tests.literals import TEST_SMALL_DOCUMENT_PATH
-from mayan.apps.documents.tests.mixins.document_mixins import DocumentTestMixin
-from mayan.apps.testing.tests.base import BaseTestCase
 
 from ..exceptions import (
     DocumentAlreadyCheckedOut, DocumentNotCheckedOut,
@@ -58,7 +54,7 @@ class DocumentCheckoutTestCase(
         self._check_out_test_document()
 
         # Ensure we wait from longer than the document check out expiration
-        time.sleep(self._test_document_check_out_seconds + 0.1)
+        self._test_delay(seconds=self._test_document_check_out_seconds + 0.1)
 
         DocumentCheckout.objects.check_in_expired_check_outs()
 

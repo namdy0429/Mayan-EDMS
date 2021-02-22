@@ -1,3 +1,5 @@
+from django.db.models import Q
+
 from ..models import WebLink
 
 from .literals import (
@@ -6,81 +8,106 @@ from .literals import (
 
 
 class ResolvedWebLinkAPIViewTestMixin(object):
-    def _request_resolved_web_link_detail_view(self):
+    def _request_resolved_web_link_detail_api_view(self):
         return self.get(
             viewname='rest_api:resolved_web_link-detail',
             kwargs={
-                'pk': self.test_document.pk,
-                'resolved_web_link_pk': self.test_web_link.pk
+                'document_id': self.test_document.pk,
+                'resolved_web_link_id': self.test_web_link.pk
             }
         )
         self._create_test_web_link(add_test_document_type=True)
 
-    def _request_resolved_web_link_list_view(self):
+    def _request_resolved_web_link_list_api_view(self):
         return self.get(
             viewname='rest_api:resolved_web_link-list', kwargs={
-                'pk': self.test_document.pk
+                'document_id': self.test_document.pk
             }
         )
 
-    def _request_resolved_web_link_navigate_view(self):
+    def _request_resolved_web_link_navigate_api_view(self):
         return self.get(
             viewname='rest_api:resolved_web_link-navigate',
             kwargs={
-                'pk': self.test_document.pk,
-                'resolved_web_link_pk': self.test_web_link.pk
+                'document_id': self.test_document.pk,
+                'resolved_web_link_id': self.test_web_link.pk
             }
         )
 
 
 class WebLinkAPIViewTestMixin(object):
     def _request_test_web_link_create_api_view(self):
-        return self.post(
+        pk_list = list(WebLink.objects.values('pk'))
+
+        response = self.post(
             viewname='rest_api:web_link-list', data={
                 'label': TEST_WEB_LINK_LABEL,
                 'template': TEST_WEB_LINK_TEMPLATE
             }
         )
 
-    def _request_test_web_link_create_with_document_type_api_view(self):
-        return self.post(
-            viewname='rest_api:web_link-list', data={
-                'label': TEST_WEB_LINK_LABEL,
-                'document_types_pk_list': self.test_document_type.pk,
-                'template': TEST_WEB_LINK_TEMPLATE
-            },
-        )
+        try:
+            self.test_web_link = WebLink.objects.get(
+                ~Q(pk__in=pk_list)
+            )
+        except WebLink.DoesNotExist:
+            self.test_web_link = None
+
+        return response
 
     def _request_test_web_link_delete_api_view(self):
         return self.delete(
             viewname='rest_api:web_link-detail', kwargs={
-                'pk': self.test_web_link.pk
+                'web_link_id': self.test_web_link.pk
             }
         )
 
     def _request_test_web_link_detail_api_view(self):
         return self.get(
             viewname='rest_api:web_link-detail', kwargs={
-                'pk': self.test_web_link.pk
+                'web_link_id': self.test_web_link.pk
             }
         )
 
-    def _request_test_web_link_edit_patch_api_view(self):
+    def _request_test_web_link_edit_via_patch_api_view(self):
         return self.patch(
             viewname='rest_api:web_link-detail',
-            kwargs={'pk': self.test_web_link.pk}, data={
+            kwargs={'web_link_id': self.test_web_link.pk}, data={
                 'label': TEST_WEB_LINK_LABEL_EDITED,
-                'document_types_pk_list': self.test_document_type.pk
             }
         )
 
-    def _request_test_web_link_edit_put_api_view(self):
+    def _request_test_web_link_edit_via_put_api_view(self):
         return self.put(
             viewname='rest_api:web_link-detail',
-            kwargs={'pk': self.test_web_link.pk}, data={
+            kwargs={'web_link_id': self.test_web_link.pk}, data={
                 'label': TEST_WEB_LINK_LABEL_EDITED,
-                'document_types_pk_list': self.test_document_type.pk,
                 'template': TEST_WEB_LINK_TEMPLATE
+            }
+        )
+
+
+class WebLinkDocumentTypeAPIViewMixin:
+    def _request_test_web_link_document_type_add_api_view(self):
+        return self.post(
+            viewname='rest_api:web_link-document_type-add',
+            kwargs={'web_link_id': self.test_web_link.pk}, data={
+                'document_type': self.test_document_type.pk
+            }
+        )
+
+    def _request_test_web_link_document_type_list_api_view(self):
+        return self.get(
+            viewname='rest_api:web_link-document_type-list', kwargs={
+                'web_link_id': self.test_web_link.pk,
+            }
+        )
+
+    def _request_test_web_link_document_type_remove_api_view(self):
+        return self.post(
+            viewname='rest_api:web_link-document_type-remove',
+            kwargs={'web_link_id': self.test_web_link.pk}, data={
+                'document_type': self.test_document_type.pk
             }
         )
 
@@ -92,6 +119,28 @@ class WebLinkTestMixin:
         )
         if add_document_type:
             self.test_web_link.document_types.add(self.test_document_type)
+
+
+class WebLinkDocumentTypeViewTestMixin:
+    def _request_test_web_link_document_type_add_view(self):
+        return self.post(
+            viewname='web_links:web_link_document_types', kwargs={
+                'web_link_id': self.test_web_link.pk,
+            }, data={
+                'available-submit': 'true',
+                'available-selection': self.test_document_type.pk
+            }
+        )
+
+    def _request_test_web_link_document_type_remove_view(self):
+        return self.post(
+            viewname='web_links:web_link_document_types', kwargs={
+                'web_link_id': self.test_web_link.pk,
+            }, data={
+                'added-submit': 'true',
+                'added-selection': self.test_document_type.pk
+            }
+        )
 
 
 class WebLinkViewTestMixin:
@@ -111,12 +160,23 @@ class WebLinkViewTestMixin:
         )
 
     def _request_test_web_link_create_view(self):
-        return self.post(
+        pk_list = list(WebLink.objects.values('pk'))
+
+        response = self.post(
             viewname='web_links:web_link_create', data={
                 'label': TEST_WEB_LINK_LABEL,
                 'template_template': TEST_WEB_LINK_TEMPLATE,
             }
         )
+
+        try:
+            self.test_web_link = WebLink.objects.get(
+                ~Q(pk__in=pk_list)
+            )
+        except WebLink.DoesNotExist:
+            self.test_web_link = None
+
+        return response
 
     def _request_test_web_link_delete_view(self):
         return self.post(

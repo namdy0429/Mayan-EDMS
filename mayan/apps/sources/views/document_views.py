@@ -8,7 +8,7 @@ from django.utils.translation import ugettext_lazy as _
 
 from mayan.apps.documents.models.document_type_models import DocumentType
 from mayan.apps.documents.permissions import permission_document_create
-from mayan.apps.views.mixins import ExternalObjectMixin
+from mayan.apps.views.mixins import ExternalObjectViewMixin
 
 from ..forms import NewDocumentForm
 from ..models import Source
@@ -19,7 +19,7 @@ __all__ = ('DocumentUploadInteractiveView',)
 logger = logging.getLogger(name=__name__)
 
 
-class DocumentUploadInteractiveView(ExternalObjectMixin, UploadBaseView):
+class DocumentUploadInteractiveView(ExternalObjectViewMixin, UploadBaseView):
     external_object_class = DocumentType
     external_object_permission = permission_document_create
     document_form = NewDocumentForm

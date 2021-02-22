@@ -16,9 +16,6 @@ from mayan.apps.common.menus import (
 from mayan.apps.common.signals import signal_perform_upgrade
 from mayan.apps.dashboards.dashboards import dashboard_main
 from mayan.apps.events.classes import EventModelRegistry, ModelEventType
-from mayan.apps.events.links import (
-    link_events_for_object, link_object_event_types_user_subcriptions_list
-)
 from mayan.apps.events.permissions import permission_events_view
 from mayan.apps.navigation.classes import SourceColumn
 from mayan.apps.user_management.links import link_group_list
@@ -49,12 +46,14 @@ class PermissionsApp(MayanAppConfig):
         super().ready()
 
         Role = self.get_model('Role')
+        StoredPermission = self.get_model('StoredPermission')
         Group = apps.get_model(app_label='auth', model_name='Group')
 
         Group.add_to_class(name='roles_add', value=method_group_roles_add)
         Group.add_to_class(name='roles_remove', value=method_group_roles_remove)
 
         EventModelRegistry.register(model=Role)
+        EventModelRegistry.register(model=StoredPermission)
 
         ModelCopy(
             model=Role, bind_link=True, register_permission=True
@@ -105,9 +104,7 @@ class PermissionsApp(MayanAppConfig):
 
         menu_list_facet.bind_links(
             links=(
-                link_acl_list, link_events_for_object,
-                link_object_event_types_user_subcriptions_list,
-                link_role_groups, link_role_permissions,
+                link_acl_list, link_role_groups, link_role_permissions
             ), sources=(Role,)
         )
         menu_list_facet.bind_links(

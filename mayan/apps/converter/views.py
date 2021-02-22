@@ -8,11 +8,14 @@ from django.utils.translation import ugettext_lazy as _, ungettext
 
 from mayan.apps.views.generics import (
     FormView, MultipleObjectConfirmActionView, SingleObjectCreateView,
-    SingleObjectDeleteView, SingleObjectEditView, SingleObjectListView
+    SingleObjectDeleteView, SingleObjectDetailView, SingleObjectEditView,
+    SingleObjectListView
 )
-from mayan.apps.views.mixins import ExternalContentTypeObjectMixin
+from mayan.apps.views.mixins import ExternalContentTypeObjectViewMixin
 
-from .forms import LayerTransformationForm, LayerTransformationSelectForm
+from .forms import (
+    AssetDetailForm, LayerTransformationForm, LayerTransformationSelectForm
+)
 from .icons import icon_asset_list
 from .links import link_asset_create, link_transformation_select
 from .models import Asset, LayerTransformation, ObjectLayer
@@ -88,6 +91,19 @@ class AssetDeleteView(MultipleObjectConfirmActionView):
             )
 
 
+class AssetDetailView(SingleObjectDetailView):
+    form_class = AssetDetailForm
+    model = Asset
+    object_permission = permission_asset_view
+    pk_url_kwarg = 'asset_id'
+
+    def get_extra_context(self):
+        return {
+            'object': self.object,
+            'title': _('Details asset: %s') % self.object,
+        }
+
+
 class AssetEditView(SingleObjectEditView):
     fields = ('label', 'internal_name', 'file')
     model = Asset
@@ -129,7 +145,7 @@ class AssetListView(SingleObjectListView):
 
 
 class TransformationCreateView(
-    LayerViewMixin, ExternalContentTypeObjectMixin, SingleObjectCreateView
+    LayerViewMixin, ExternalContentTypeObjectViewMixin, SingleObjectCreateView
 ):
     form_class = LayerTransformationForm
 
@@ -302,7 +318,7 @@ class TransformationEditView(LayerViewMixin, SingleObjectEditView):
 
 
 class TransformationListView(
-    LayerViewMixin, ExternalContentTypeObjectMixin, SingleObjectListView
+    LayerViewMixin, ExternalContentTypeObjectViewMixin, SingleObjectListView
 ):
     def get_external_object_permission(self):
         return self.layer.get_permission(action='view')
@@ -339,7 +355,7 @@ class TransformationListView(
 
 
 class TransformationSelectView(
-    LayerViewMixin, ExternalContentTypeObjectMixin, FormView
+    LayerViewMixin, ExternalContentTypeObjectViewMixin, FormView
 ):
     form_class = LayerTransformationSelectForm
     template_name = 'appearance/generic_form.html'

@@ -18,9 +18,6 @@ from mayan.apps.common.menus import (
 from mayan.apps.documents.links.document_type_links import link_document_type_list
 from mayan.apps.documents.signals import signal_post_document_type_change
 from mayan.apps.events.classes import EventModelRegistry, ModelEventType
-from mayan.apps.events.links import (
-    link_events_for_object, link_object_event_types_user_subcriptions_list,
-)
 from mayan.apps.events.permissions import permission_events_view
 from mayan.apps.navigation.classes import SourceColumn
 from mayan.apps.views.html_widgets import TwoStateWidget
@@ -36,7 +33,7 @@ from .handlers import (
     handler_post_document_type_metadata_type_delete,
     handler_post_document_type_change_metadata
 )
-from .html_widgets import widget_document_metadata
+from .html_widgets import DocumentMetadataWidget
 from .links import (
     link_metadata_add, link_metadata_edit, link_metadata_multiple_add,
     link_metadata_multiple_edit, link_metadata_multiple_remove,
@@ -45,6 +42,7 @@ from .links import (
     link_setup_metadata_type_delete, link_setup_metadata_type_document_types,
     link_setup_metadata_type_edit, link_setup_metadata_type_list,
 )
+from .methods import method_document_get_metadata
 from .permissions import (
     permission_document_metadata_add, permission_document_metadata_edit,
     permission_document_metadata_remove, permission_document_metadata_view,
@@ -67,17 +65,22 @@ class MetadataApp(MayanAppConfig):
     def ready(self):
         super().ready()
 
-        from .wizard_steps import WizardStepMetadata  # NOQA
-
         Document = apps.get_model(
             app_label='documents', model_name='Document'
         )
-        #DocumentFilePageResult = apps.get_model(
-        #    app_label='documents', model_name='DocumentFilePageResult'
-        #)
-        #DocumentVersionPageResult = apps.get_model(
-        #    app_label='documents', model_name='DocumentVersionPageResult'
-        #)
+        DocumentFileSearchResult = apps.get_model(
+            app_label='documents', model_name='DocumentFileSearchResult'
+        )
+        DocumentFilePageSearchResult = apps.get_model(
+            app_label='documents', model_name='DocumentFilePageSearchResult'
+        )
+        DocumentVersionSearchResult = apps.get_model(
+            app_label='documents', model_name='DocumentVersionSearchResult'
+        )
+        DocumentVersionPageSearchResult = apps.get_model(
+            app_label='documents',
+            model_name='DocumentVersionPageSearchResult'
+        )
 
         DocumentType = apps.get_model(
             app_label='documents', model_name='DocumentType'
@@ -91,6 +94,9 @@ class MetadataApp(MayanAppConfig):
 
         Document.add_to_class(
             name='metadata_value_of', value=DocumentMetadataHelper.constructor
+        )
+        Document.add_to_class(
+            name='get_metadata', value=method_document_get_metadata
         )
 
         EventModelRegistry.register(model=MetadataType)
@@ -177,21 +183,33 @@ class MetadataApp(MayanAppConfig):
         )
 
         model_query_fields_document = ModelQueryFields(model=Document)
-        model_query_fields_document.add_prefetch_related_field(field_name='metadata')
+        model_query_fields_document.add_prefetch_related_field(
+            field_name='metadata'
+        )
 
         SourceColumn(
             source=Document, label=_('Metadata'),
-            func=widget_document_metadata
+            widget=DocumentMetadataWidget
         )
 
-        #SourceColumn(
-        #    source=DocumentFilePageResult, label=_('Metadata'),
-        #    func=widget_document_metadata
-        #)
-        #SourceColumn(
-        #    source=DocumentVersionPageResult, label=_('Metadata'),
-        #    func=widget_document_metadata
-        #)
+        SourceColumn(
+            attribute='document', source=DocumentFileSearchResult,
+            label=_('Metadata'), widget=DocumentMetadataWidget
+        )
+        SourceColumn(
+            attribute='document_file__document',
+            source=DocumentFilePageSearchResult, label=_('Metadata'),
+            widget=DocumentMetadataWidget
+        )
+        SourceColumn(
+            attribute='document', source=DocumentVersionSearchResult,
+            label=_('Metadata'), widget=DocumentMetadataWidget
+        )
+        SourceColumn(
+            attribute='document_version__document',
+            source=DocumentVersionPageSearchResult, label=_('Metadata'),
+            widget=DocumentMetadataWidget
+        )
 
         SourceColumn(
             attribute='metadata_type', is_identifier=True,
@@ -230,9 +248,7 @@ class MetadataApp(MayanAppConfig):
         )
         menu_list_facet.bind_links(
             links=(
-                link_acl_list, link_setup_metadata_type_document_types,
-                link_object_event_types_user_subcriptions_list,
-                link_events_for_object,
+                link_acl_list, link_setup_metadata_type_document_types
             ), sources=(MetadataType,)
         )
         menu_object.bind_links(

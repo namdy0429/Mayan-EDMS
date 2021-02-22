@@ -21,7 +21,7 @@ from mayan.apps.common.menus import (
     menu_list_facet, menu_object, menu_related, menu_secondary, menu_setup
 )
 
-from .classes import SourceBackend
+from .classes import DocumentCreateWizardStep, SourceBackend
 from .handlers import (
     handler_create_default_document_source,
     handler_delete_interval_source_periodic_task,
@@ -53,6 +53,9 @@ class SourcesApp(MayanAppConfig):
 
     def ready(self):
         super().ready()
+
+        DocumentCreateWizardStep.load_modules()
+
         DocumentType = apps.get_model(
             app_label='documents', model_name='DocumentType'
         )

@@ -451,6 +451,7 @@ class WatchFolderTestMixin(SourceTestMixin):
     def setUp(self):
         super().setUp()
         self.temporary_directory = mkdtemp()
+        self.test_watch_folders = []
 
     def tearDown(self):
         shutil.rmtree(path=self.temporary_directory)
@@ -485,3 +486,6 @@ class WebFormSourceTestMixin(SourceTestMixin):
             backend_path=SourceBackendWebForm.get_class_path(),
             backend_data=backend_data
         )
+
+        self.test_watch_folder = WatchFolderSource.objects.create(**kwargs)
+        self.test_watch_folders.append(self.test_watch_folder)

@@ -11,21 +11,21 @@ from mayan.apps.views.generics import (
     SingleObjectListView
 )
 from mayan.apps.views.mixins import (
-    ContentTypeViewMixin, ExternalObjectMixin
+    ContentTypeViewMixin, ExternalObjectViewMixin
 )
 
 from .classes import ModelPermission
 from .forms import ACLCreateForm
 from .icons import icon_acl_list
 from .links import link_acl_create
-from .models import AccessControlList
+from .models import AccessControlList, GlobalAccessControlListProxy
 from .permissions import permission_acl_edit, permission_acl_view
 
 logger = logging.getLogger(name=__name__)
 
 
 class ACLCreateView(
-    ContentTypeViewMixin, ExternalObjectMixin, SingleObjectCreateView
+    ContentTypeViewMixin, ExternalObjectViewMixin, SingleObjectCreateView
 ):
     content_type_url_kw_args = {
         'app_label': 'app_label',
@@ -72,6 +72,7 @@ class ACLCreateView(
 
     def get_instance_extra_data(self):
         return {
+            '_event_actor': self.request.user,
             'content_object': self.external_object
         }
 
@@ -95,6 +96,11 @@ class ACLDeleteView(SingleObjectDeleteView):
             'title': _('Delete ACL: %s') % self.object,
         }
 
+    def get_instance_extra_data(self):
+        return {
+            '_event_actor': self.request.user
+        }
+
     def get_post_action_redirect(self):
         return reverse(
             viewname='acls:acl_list', kwargs={
@@ -105,7 +111,7 @@ class ACLDeleteView(SingleObjectDeleteView):
         )
 
 
-class ACLListView(ContentTypeViewMixin, ExternalObjectMixin, SingleObjectListView):
+class ACLListView(ContentTypeViewMixin, ExternalObjectViewMixin, SingleObjectListView):
     content_type_url_kw_args = {
         'app_label': 'app_label',
         'model_name': 'model_name'
@@ -183,7 +189,7 @@ class ACLPermissionsView(AddRemoveView):
         return sorted(namespaces_dictionary.items())
 
     def get_actions_extra_kwargs(self):
-        return {'_user': self.request.user}
+        return {'_event_actor': self.request.user}
 
     def get_disabled_choices(self):
         """
@@ -236,3 +242,26 @@ class ACLPermissionsView(AddRemoveView):
         return ModelPermission.get_for_instance(
             instance=self.main_object.content_object
         )
+
+
+class GlobalACLListView(SingleObjectListView):
+    model = GlobalAccessControlListProxy
+    object_permission = permission_acl_view
+
+    def get_extra_context(self):
+        return {
+            'hide_object': True,
+            'no_results_icon': icon_acl_list,
+            'no_results_title': _(
+                'There are no ACLs'
+            ),
+            'no_results_text': _(
+                'ACL stands for Access Control List and is a precise method '
+                'to control user access to objects in the system. ACLs '
+                'allow granting a permission to a role but only for a '
+                'specific object or set of objects.'
+            ),
+            'title': _(
+                'Global access control lists'
+            ),
+        }

@@ -1,5 +1,5 @@
 from django.urls import reverse
-from django.utils.translation import ugettext_lazy as _, ungettext
+from django.utils.translation import ugettext_lazy as _
 
 from mayan.apps.acls.models import AccessControlList
 from mayan.apps.documents.models import Document
@@ -21,36 +21,36 @@ from .permissions import (
 
 
 class DocumentCheckInView(MultipleObjectConfirmActionView):
-    error_message = 'Unable to check in document "%(instance)s". %(exception)s'
-    model = Document
+    error_message = _(
+        'Unable to check in document "%(instance)s"; %(exception)s'
+    )
     pk_url_kwarg = 'document_id'
-    success_message_singular = 'Check in requested for %(count)d document.'
-    success_message_plural = 'Check in requested for %(count)d documents.'
+    success_message_single = _(
+        'Document "%(object)s" checked in successfully.'
+    )
+    success_message_singular = _(
+        '%(count)d document checked in successfully.'
+    )
+    success_message_plural = _(
+        '%(count)d documents checked in successfully.'
+    )
+    title_single = _('Check in document "%(object)s".')
+    title_singular = _('Check in %(count)d document.')
+    title_plural = _('Check in %(count)d documents.')
 
     def get_extra_context(self):
-        queryset = self.get_object_list()
-
-        result = {
-            'title': ungettext(
-                singular='Check in %(count)d document',
-                plural='Check in %(count)d documents',
-                number=queryset.count()
-            ) % {
-                'count': queryset.count(),
-            }
+        context = {
+            'submit_label': _('Check in'),
         }
 
-        if queryset.count() == 1:
-            result.update(
+        if self.object_list.count() == 1:
+            context.update(
                 {
-                    'object': queryset.first(),
-                    'title': _(
-                        'Check in document: %s'
-                    ) % queryset.first()
+                    'object': self.object_list.first(),
                 }
             )
 
-        return result
+        return context
 
     def get_post_object_action_url(self):
         if self.action_count == 1:
@@ -64,18 +64,17 @@ class DocumentCheckInView(MultipleObjectConfirmActionView):
 
     def get_source_queryset(self):
         # object_permission is None to disable restricting queryset mixin
-        # and restrict the queryset ourselves from two permissions
-
-        source_queryset = super().get_source_queryset()
+        # and restrict the queryset ourselves from two permissions.
+        document_queryset = Document.valid.all()
 
         check_in_queryset = AccessControlList.objects.restrict_queryset(
-            permission=permission_document_check_in, queryset=source_queryset,
+            permission=permission_document_check_in, queryset=document_queryset,
             user=self.request.user
         )
 
         check_in_override_queryset = AccessControlList.objects.restrict_queryset(
             permission=permission_document_check_in_override,
-            queryset=source_queryset, user=self.request.user
+            queryset=document_queryset, user=self.request.user
         )
 
         return check_in_queryset | check_in_override_queryset
@@ -90,38 +89,39 @@ class DocumentCheckInView(MultipleObjectConfirmActionView):
 
 
 class DocumentCheckOutView(MultipleObjectFormActionView):
-    error_message = 'Unable to checkout document "%(instance)s". %(exception)s'
+    error_message = _(
+        'Unable to checkout document "%(instance)s"; %(exception)s'
+    )
     form_class = DocumentCheckOutForm
-    model = Document
     object_permission = permission_document_check_out
     pk_url_kwarg = 'document_id'
-    success_message_singular = '%(count)d document checked out.'
-    success_message_plural = '%(count)d documents checked out.'
+    source_queryset = Document.valid
+    success_message_single = _(
+        'Document "%(object)s" checked out successfully.'
+    )
+    success_message_singular = _(
+        '%(count)d document checked out successfully.'
+    )
+    success_message_plural = _(
+        '%(count)d documents checked out successfully.'
+    )
+    title_single = _('Checkout document "%(object)s".')
+    title_singular = _('Checkout %(count)d document.')
+    title_plural = _('Checkout %(count)d documents.')
 
     def get_extra_context(self):
-        queryset = self.get_object_list()
-
-        result = {
-            'title': ungettext(
-                singular='Checkout %(count)d document',
-                plural='Checkout %(count)d documents',
-                number=queryset.count()
-            ) % {
-                'count': queryset.count(),
-            }
+        context = {
+            'submit_label': _('Checkout'),
         }
 
-        if queryset.count() == 1:
-            result.update(
+        if self.object_list.count() == 1:
+            context.update(
                 {
-                    'object': queryset.first(),
-                    'title': _(
-                        'Check out document: %s'
-                    ) % queryset.first()
+                    'object': self.object_list.first(),
                 }
             )
 
-        return result
+        return context
 
     def get_post_object_action_url(self):
         if self.action_count == 1:
@@ -147,9 +147,9 @@ class DocumentCheckOutView(MultipleObjectFormActionView):
 
 class DocumentCheckOutDetailView(SingleObjectDetailView):
     form_class = DocumentCheckOutDetailForm
-    model = Document
     object_permission = permission_document_check_out_detail_view
     pk_url_kwarg = 'document_id'
+    source_queryset = Document.valid
 
     def get_extra_context(self):
         return {
@@ -162,11 +162,12 @@ class DocumentCheckOutDetailView(SingleObjectDetailView):
 
 class DocumentCheckOutListView(DocumentListView):
     def get_document_queryset(self):
-        return AccessControlList.objects.restrict_queryset(
+        queryset = AccessControlList.objects.restrict_queryset(
             permission=permission_document_check_out_detail_view,
             queryset=DocumentCheckout.objects.checked_out_documents(),
             user=self.request.user
         )
+        return Document.valid.filter(pk__in=queryset.values('pk'))
 
     def get_extra_context(self):
         context = super().get_extra_context()

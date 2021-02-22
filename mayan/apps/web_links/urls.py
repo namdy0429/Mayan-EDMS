@@ -2,7 +2,9 @@ from django.conf.urls import url
 
 from .api_views import (
     APIResolvedWebLinkListView, APIResolvedWebLinkNavigateView,
-    APIResolvedWebLinkView, APIWebLinkView, APIWebLinkListView
+    APIResolvedWebLinkView, APIWebLinkDocumentTypeAddView,
+    APIWebLinkDocumentTypeListView, APIWebLinkDocumentTypeRemoveView,
+    APIWebLinkView, APIWebLinkListView
 )
 from .views import (
     DocumentWebLinkListView, DocumentTypeWebLinksView, ResolvedWebLinkView,
@@ -49,26 +51,41 @@ urlpatterns = [
 
 api_urls = [
     url(
-        regex=r'^documents/(?P<pk>[0-9]+)/resolved_web_links/$',
+        regex=r'^documents/(?P<document_id>[0-9]+)/resolved_web_links/$',
         name='resolved_web_link-list',
         view=APIResolvedWebLinkListView.as_view()
     ),
     url(
-        regex=r'^documents/(?P<pk>[0-9]+)/resolved_web_links/(?P<resolved_web_link_pk>[0-9]+)/$',
+        regex=r'^documents/(?P<document_id>[0-9]+)/resolved_web_links/(?P<resolved_web_link_id>[0-9]+)/$',
         name='resolved_web_link-detail',
         view=APIResolvedWebLinkView.as_view()
     ),
     url(
-        regex=r'^documents/(?P<pk>[0-9]+)/resolved_web_links/(?P<resolved_web_link_pk>[0-9]+)/navigate/$',
+        regex=r'^documents/(?P<document_id>[0-9]+)/resolved_web_links/(?P<resolved_web_link_id>[0-9]+)/navigate/$',
         name='resolved_web_link-navigate',
         view=APIResolvedWebLinkNavigateView.as_view()
     ),
     url(
-        regex=r'^web_links/$', view=APIWebLinkListView.as_view(),
-        name='web_link-list'
+        regex=r'^web_links/$', name='web_link-list',
+        view=APIWebLinkListView.as_view()
     ),
     url(
-        regex=r'^web_links/(?P<pk>[0-9]+)/$',
-        view=APIWebLinkView.as_view(), name='web_link-detail'
+        regex=r'^web_links/(?P<web_link_id>[0-9]+)/$',
+        name='web_link-detail', view=APIWebLinkView.as_view()
+    ),
+    url(
+        regex=r'^web_links/(?P<web_link_id>[0-9]+)/document_types/$',
+        name='web_link-document_type-list',
+        view=APIWebLinkDocumentTypeListView.as_view()
+    ),
+    url(
+        regex=r'^web_links/(?P<web_link_id>[0-9]+)/document_types/add/$',
+        name='web_link-document_type-add',
+        view=APIWebLinkDocumentTypeAddView.as_view()
+    ),
+    url(
+        regex=r'^web_links/(?P<web_link_id>[0-9]+)/document_types/remove/$',
+        name='web_link-document_type-remove',
+        view=APIWebLinkDocumentTypeRemoveView.as_view()
     ),
 ]

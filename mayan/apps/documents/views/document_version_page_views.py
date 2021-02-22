@@ -16,7 +16,7 @@ from mayan.apps.views.generics import (
     FormView, MultipleObjectConfirmActionView, SingleObjectDeleteView,
     SingleObjectListView, SimpleView
 )
-from mayan.apps.views.mixins import ExternalObjectMixin
+from mayan.apps.views.mixins import ExternalObjectViewMixin
 from mayan.apps.views.utils import resolve
 
 from ..forms.document_version_page_forms import (
@@ -53,9 +53,9 @@ logger = logging.getLogger(name=__name__)
 
 
 class DocumentVersionPageDeleteView(SingleObjectDeleteView):
-    model = DocumentVersionPage
     object_permission = permission_document_version_edit
     pk_url_kwarg = 'document_version_page_id'
+    source_queryset = DocumentVersionPage.valid
 
     def get_extra_context(self):
         return {
@@ -81,10 +81,10 @@ class DocumentVersionPageDeleteView(SingleObjectDeleteView):
         )
 
 
-class DocumentVersionPageListView(ExternalObjectMixin, SingleObjectListView):
-    external_object_class = DocumentVersion
+class DocumentVersionPageListView(ExternalObjectViewMixin, SingleObjectListView):
     external_object_permission = permission_document_version_view
     external_object_pk_url_kwarg = 'document_version_id'
+    external_object_queryset = DocumentVersion.valid
 
     def get_extra_context(self):
         return {
@@ -114,17 +114,11 @@ class DocumentVersionPageListView(ExternalObjectMixin, SingleObjectListView):
         return queryset.filter(pk__in=self.external_object.pages.all())
 
 
-class DocumentVersionPageListRemapView(ExternalObjectMixin, FormView):
-    external_object_class = DocumentVersion
+class DocumentVersionPageListRemapView(ExternalObjectViewMixin, FormView):
     external_object_permission = permission_document_version_edit
     external_object_pk_url_kwarg = 'document_version_id'
+    external_object_queryset = DocumentVersion.valid
     form_class = DocumentVersionPageMappingFormSet
-    #success_message = _(
-    #    'Metadata edit request performed on %(count)d document'
-    #)
-    #success_message_plural = _(
-    #    'Metadata edit request performed on %(count)d documents'
-    #)
 
     def form_valid(self, form):
         annotated_content_object_list = []
@@ -226,9 +220,9 @@ class DocumentVersionPageListRemapView(ExternalObjectMixin, FormView):
 
 
 class DocumentVersionPageListResetView(MultipleObjectConfirmActionView):
-    model = DocumentVersion
     object_permission = permission_document_version_edit
     pk_url_kwarg = 'document_version_id'
+    source_queryset = DocumentVersion.valid
     success_message = _(
         '%(count)d document version queued for page list reset.'
     )
@@ -268,10 +262,10 @@ class DocumentVersionPageListResetView(MultipleObjectConfirmActionView):
         )
 
 
-class DocumentVersionPageNavigationBase(ExternalObjectMixin, RedirectView):
+class DocumentVersionPageNavigationBase(ExternalObjectViewMixin, RedirectView):
     external_object_permission = permission_document_version_view
     external_object_pk_url_kwarg = 'document_version_page_id'
-    external_object_queryset = DocumentVersionPage
+    external_object_queryset = DocumentVersionPage.valid
 
     def get_redirect_url(self, *args, **kwargs):
         """
@@ -290,7 +284,7 @@ class DocumentVersionPageNavigationBase(ExternalObjectMixin, RedirectView):
 
         # Obtain the view name to be able to resolve it back with new keyword
         # arguments.
-        resolver_match = resolve(path=force_text(parsed_url.path))
+        resolver_match = resolve(path=force_text(s=parsed_url.path))
 
         new_kwargs = self.get_new_kwargs()
 
@@ -312,12 +306,16 @@ class DocumentVersionPageNavigationBase(ExternalObjectMixin, RedirectView):
 
 class DocumentVersionPageNavigationFirst(DocumentVersionPageNavigationBase):
     def get_new_kwargs(self):
-        return {'document_version_page_id': self.external_object.siblings.first().pk}
+        return {
+            'document_version_page_id': self.external_object.siblings.first().pk
+        }
 
 
 class DocumentVersionPageNavigationLast(DocumentVersionPageNavigationBase):
     def get_new_kwargs(self):
-        return {'document_version_page_id': self.external_object.siblings.last().pk}
+        return {
+            'document_version_page_id': self.external_object.siblings.last().pk
+        }
 
 
 class DocumentVersionPageNavigationNext(DocumentVersionPageNavigationBase):
@@ -352,10 +350,10 @@ class DocumentVersionPageNavigationPrevious(DocumentVersionPageNavigationBase):
             return {'document_version_page_id': self.external_object.pk}
 
 
-class DocumentVersionPageView(ExternalObjectMixin, SimpleView):
+class DocumentVersionPageView(ExternalObjectViewMixin, SimpleView):
     external_object_permission = permission_document_version_view
     external_object_pk_url_kwarg = 'document_version_page_id'
-    external_object_queryset = DocumentVersionPage
+    external_object_queryset = DocumentVersionPage.valid
     template_name = 'appearance/generic_form.html'
 
     def get_extra_context(self):
@@ -388,10 +386,10 @@ class DocumentVersionPageViewResetView(RedirectView):
     pattern_name = 'documents:document_version_page_view'
 
 
-class DocumentVersionPageInteractiveTransformation(ExternalObjectMixin, RedirectView):
-    external_object_class = DocumentVersionPage
+class DocumentVersionPageInteractiveTransformation(ExternalObjectViewMixin, RedirectView):
     external_object_permission = permission_document_version_view
     external_object_pk_url_kwarg = 'document_version_page_id'
+    external_object_queryset = DocumentVersionPage.valid
 
     def get_object(self):
         return self.external_object

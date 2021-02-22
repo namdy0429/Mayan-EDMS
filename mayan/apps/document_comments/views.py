@@ -7,7 +7,7 @@ from mayan.apps.views.generics import (
     SingleObjectCreateView, SingleObjectDeleteView, SingleObjectDetailView,
     SingleObjectEditView, SingleObjectListView
 )
-from mayan.apps.views.mixins import ExternalObjectMixin
+from mayan.apps.views.mixins import ExternalObjectViewMixin
 
 from .forms import DocumentCommentDetailForm
 from .icons import icon_comments_for_document
@@ -19,11 +19,11 @@ from .permissions import (
 )
 
 
-class DocumentCommentCreateView(ExternalObjectMixin, SingleObjectCreateView):
-    external_object_class = Document
+class DocumentCommentCreateView(ExternalObjectViewMixin, SingleObjectCreateView):
     external_object_permission = permission_document_comment_create
     external_object_pk_url_kwarg = 'document_id'
-    fields = ('comment',)
+    external_object_queryset = Document.valid
+    fields = ('text',)
 
     def get_extra_context(self):
         return {
@@ -48,7 +48,6 @@ class DocumentCommentCreateView(ExternalObjectMixin, SingleObjectCreateView):
 
 
 class DocumentCommentDeleteView(SingleObjectDeleteView):
-    model = Comment
     object_permission = permission_document_comment_delete
     pk_url_kwarg = 'comment_id'
 
@@ -72,10 +71,14 @@ class DocumentCommentDeleteView(SingleObjectDeleteView):
             }
         )
 
+    def get_source_queryset(self):
+        return Comment.objects.filter(
+            document_id__in=Document.valid.values('id')
+        )
+
 
 class DocumentCommentDetailView(SingleObjectDetailView):
     form_class = DocumentCommentDetailForm
-    model = Comment
     pk_url_kwarg = 'comment_id'
     object_permission = permission_document_comment_view
 
@@ -87,10 +90,14 @@ class DocumentCommentDetailView(SingleObjectDetailView):
             'title': _('Details for comment: %s?') % self.object,
         }
 
+    def get_source_queryset(self):
+        return Comment.objects.filter(
+            document_id__in=Document.valid.values('id')
+        )
+
 
 class DocumentCommentEditView(SingleObjectEditView):
-    fields = ('comment',)
-    model = Comment
+    fields = ('text',)
     pk_url_kwarg = 'comment_id'
     object_permission = permission_document_comment_edit
 
@@ -114,11 +121,16 @@ class DocumentCommentEditView(SingleObjectEditView):
             }
         )
 
+    def get_source_queryset(self):
+        return Comment.objects.filter(
+            document_id__in=Document.valid.values('id')
+        )
 
-class DocumentCommentListView(ExternalObjectMixin, SingleObjectListView):
-    external_object_class = Document
+
+class DocumentCommentListView(ExternalObjectViewMixin, SingleObjectListView):
     external_object_permission = permission_document_comment_view
     external_object_pk_url_kwarg = 'document_id'
+    external_object_queryset = Document.valid
 
     def get_extra_context(self):
         return {

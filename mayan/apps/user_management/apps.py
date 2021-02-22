@@ -15,9 +15,6 @@ from mayan.apps.common.menus import (
 )
 from mayan.apps.dashboards.dashboards import dashboard_main
 from mayan.apps.events.classes import EventModelRegistry, ModelEventType
-from mayan.apps.events.links import (
-    link_events_for_object, link_object_event_types_user_subcriptions_list
-)
 from mayan.apps.events.permissions import permission_events_view
 from mayan.apps.metadata.classes import MetadataLookup
 from mayan.apps.navigation.classes import SourceColumn
@@ -93,17 +90,11 @@ class UserManagementApp(MayanAppConfig):
         EventModelRegistry.register(model=Group)
         EventModelRegistry.register(model=User)
 
-        # Silence UnorderedObjectListWarning
-        # "Pagination may yield inconsistent result"
-        # TODO: Remove on Django 2.x
         Group._meta.ordering = ('name',)
         Group._meta.verbose_name = _('Group')
         Group._meta.verbose_name_plural = _('Groups')
         Group._meta.get_field('name').verbose_name = _('Name')
 
-        # Silence UnorderedObjectListWarning
-        # "Pagination may yield inconsistent result"
-        # TODO: Remove on Django 2.x
         User._meta.ordering = ('pk',)
         User._meta.verbose_name = _('User')
         User._meta.verbose_name_plural = _('Users')
@@ -213,8 +204,7 @@ class UserManagementApp(MayanAppConfig):
         )
         SourceColumn(
             attribute='is_active', include_label=True, is_sortable=True,
-            source=User,
-            widget=TwoStateWidget
+            source=User, widget=TwoStateWidget
         )
         SourceColumn(
             attribute='has_usable_password', include_label=True, source=User,
@@ -244,16 +234,12 @@ class UserManagementApp(MayanAppConfig):
 
         menu_list_facet.bind_links(
             links=(
-                link_acl_list, link_events_for_object,
-                link_object_event_types_user_subcriptions_list,
-                link_group_user_list,
+                link_acl_list, link_group_user_list
             ), sources=(Group,)
         )
         menu_list_facet.bind_links(
             links=(
-                link_acl_list, link_events_for_object,
-                link_object_event_types_user_subcriptions_list,
-                link_user_group_list, link_user_set_options
+                link_acl_list, link_user_group_list, link_user_set_options
             ), sources=(User,)
         )
         menu_multi_item.bind_links(

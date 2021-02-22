@@ -11,7 +11,7 @@ from mayan.apps.views.generics import (
     SingleObjectDynamicFormCreateView, SingleObjectDynamicFormEditView,
     SingleObjectListView
 )
-from mayan.apps.views.mixins import ExternalObjectMixin
+from mayan.apps.views.mixins import ExternalObjectViewMixin
 
 from ..classes import SourceBackend
 from ..forms import SourceBackendSelectionForm, SourceBackendDynamicForm
@@ -96,6 +96,9 @@ class SourceEditView(SingleObjectDynamicFormEditView):
     model = Source
     object_permission = permission_sources_edit
     pk_url_kwarg = 'source_id'
+    post_action_redirect = reverse_lazy(
+        viewname='sources:source_list'
+    )
 
     def get_extra_context(self):
         return {
@@ -129,7 +132,7 @@ class SourceListView(SingleObjectListView):
         }
 
 
-class SourceTestView(ExternalObjectMixin, ConfirmView):
+class SourceTestView(ExternalObjectViewMixin, ConfirmView):
     """
     Trigger the task_source_process_document task for a given source to
     test/debug their configuration irrespective of the schedule task setup.

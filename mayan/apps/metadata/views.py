@@ -18,7 +18,7 @@ from mayan.apps.views.generics import (
     FormView, MultipleObjectFormActionView, SingleObjectCreateView,
     SingleObjectDeleteView, SingleObjectEditView, SingleObjectListView
 )
-from mayan.apps.views.mixins import ExternalObjectMixin
+from mayan.apps.views.mixins import ExternalObjectViewMixin
 from mayan.apps.views.utils import convert_to_id_list
 
 from .api import save_metadata_list
@@ -35,7 +35,7 @@ from .links import (
     link_metadata_add, link_metadata_multiple_add,
     link_setup_metadata_type_create
 )
-from .mixins import DocumentMetadataSameTypeMixin
+from .mixins import DocumentMetadataSameTypeViewMixin
 from .models import DocumentMetadata, MetadataType
 from .permissions import (
     permission_document_metadata_add, permission_document_metadata_edit,
@@ -46,12 +46,12 @@ from .permissions import (
 
 
 class DocumentMetadataAddView(
-    DocumentMetadataSameTypeMixin, MultipleObjectFormActionView
+    DocumentMetadataSameTypeViewMixin, MultipleObjectFormActionView
 ):
     form_class = DocumentMetadataAddForm
-    model = Document
     object_permission = permission_document_metadata_add
     pk_url_kwarg = 'document_id'
+    source_queryset = Document.valid
     success_message = _('Metadata add request performed on %(count)d document')
     success_message_plural = _(
         'Metadata add request performed on %(count)d documents'
@@ -148,7 +148,8 @@ class DocumentMetadataAddView(
                         document=instance,
                         metadata_type=metadata_type,
                     )
-                    document_metadata.save(_user=self.request.user)
+                    document_metadata._event_actor = self.request.user
+                    document_metadata.save()
                     created = True
             except Exception as exception:
                 messages.error(
@@ -188,12 +189,12 @@ class DocumentMetadataAddView(
 
 
 class DocumentMetadataEditView(
-    DocumentMetadataSameTypeMixin, MultipleObjectFormActionView
+    DocumentMetadataSameTypeViewMixin, MultipleObjectFormActionView
 ):
     form_class = DocumentMetadataFormSet
-    model = Document
     object_permission = permission_document_metadata_edit
     pk_url_kwarg = 'document_id'
+    source_queryset = Document.valid
     success_message = _(
         'Metadata edit request performed on %(count)d document'
     )
@@ -321,24 +322,24 @@ class DocumentMetadataEditView(
                     except Exception as exception:
                         errors.append(exception)
 
-        for error in errors:
-            if settings.DEBUG:
-                raise
-            else:
-                if isinstance(error, ValidationError):
-                    exception_message = ', '.join(error.messages)
-                else:
-                    exception_message = force_text(s=error)
+                        if settings.DEBUG or settings.TESTING:
+                            raise
 
-                messages.error(
-                    message=_(
-                        'Error editing metadata for document: '
-                        '%(document)s; %(exception)s.'
-                    ) % {
-                        'document': instance,
-                        'exception': exception_message
-                    }, request=self.request
-                )
+        for error in errors:
+            if isinstance(error, ValidationError):
+                exception_message = ', '.join(error.messages)
+            else:
+                exception_message = force_text(s=error)
+
+            messages.error(
+                message=_(
+                    'Error editing metadata for document: '
+                    '%(document)s; %(exception)s.'
+                ) % {
+                    'document': instance,
+                    'exception': exception_message
+                }, request=self.request
+            )
         else:
             messages.success(
                 message=_(
@@ -347,10 +348,10 @@ class DocumentMetadataEditView(
             )
 
 
-class DocumentMetadataListView(ExternalObjectMixin, SingleObjectListView):
-    external_object_class = Document
+class DocumentMetadataListView(ExternalObjectViewMixin, SingleObjectListView):
     external_object_permission = permission_document_metadata_view
     external_object_pk_url_kwarg = 'document_id'
+    external_object_queryset = Document.valid
     object_permission = permission_document_metadata_view
 
     def get_extra_context(self):
@@ -381,12 +382,12 @@ class DocumentMetadataListView(ExternalObjectMixin, SingleObjectListView):
 
 
 class DocumentMetadataRemoveView(
-    DocumentMetadataSameTypeMixin, MultipleObjectFormActionView
+    DocumentMetadataSameTypeViewMixin, MultipleObjectFormActionView
 ):
     form_class = DocumentMetadataRemoveFormSet
-    model = Document
     object_permission = permission_document_metadata_remove
     pk_url_kwarg = 'document_id'
+    source_queryset = Document.valid
     success_message = _(
         'Metadata remove request performed on %(count)d document'
     )
@@ -475,7 +476,8 @@ class DocumentMetadataRemoveView(
                     document_metadata = DocumentMetadata.objects.get(
                         document=instance, metadata_type=metadata_type
                     )
-                    document_metadata.delete(_user=self.request.user)
+                    document_metadata._event_actor = self.request.user
+                    document_metadata.delete()
                     messages.success(
                         message=_(
                             'Successfully remove metadata type "%(metadata_type)s" from document: %(document)s.'
@@ -506,9 +508,9 @@ class MetadataTypeCreateView(SingleObjectCreateView):
     )
     view_permission = permission_metadata_type_create
 
-    def get_save_extra_data(self):
+    def get_instance_extra_data(self):
         return {
-            '_user': self.request.user,
+            '_event_actor': self.request.user,
         }
 
 
@@ -543,9 +545,9 @@ class MetadataTypeEditView(SingleObjectEditView):
             'title': _('Edit metadata type: %s') % self.object,
         }
 
-    def get_save_extra_data(self):
+    def get_instance_extra_data(self):
         return {
-            '_user': self.request.user,
+            '_event_actor': self.request.user,
         }
 
 

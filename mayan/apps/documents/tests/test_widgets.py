@@ -1,7 +1,7 @@
 from ..permissions import permission_document_view
 from ..widgets import BaseDocumentThumbnailWidget
 
-from .base import GenericDocumentTestCase, GenericDocumentViewTestCase
+from .base import GenericDocumentViewTestCase
 from .mixins.document_mixins import DocumentViewTestMixin
 
 

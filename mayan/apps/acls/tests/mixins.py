@@ -1,4 +1,5 @@
 from django.core.exceptions import ImproperlyConfigured
+from django.db.models import Q
 
 from mayan.apps.testing.tests.mixins import TestModelTestCaseMixin
 from mayan.apps.permissions.tests.mixins import (
@@ -12,16 +13,24 @@ from ..permissions import permission_acl_edit, permission_acl_view
 
 
 class ACLAPIViewTestMixin:
-    def _request_test_acl_create_api_view(self, extra_data=None):
-        data = {'role_pk': self.test_role.pk}
+    def _request_test_acl_create_api_view(self):
+        pk_list = list(AccessControlList.objects.values_list('pk', flat=True))
 
-        if extra_data:
-            data.update(extra_data)
-
-        return self.post(
+        response = self.post(
             viewname='rest_api:accesscontrollist-list',
-            kwargs=self.test_object_view_kwargs, data=data
+            kwargs=self.test_object_view_kwargs, data={
+                'role_id': self.test_role.pk
+            }
         )
+
+        try:
+            self.test_acl = AccessControlList.objects.get(
+                ~Q(pk__in=pk_list)
+            )
+        except AccessControlList.DoesNotExist:
+            self.test_acl = None
+
+        return response
 
     def _request_test_acl_delete_api_view(self):
         return self.delete(
@@ -29,7 +38,7 @@ class ACLAPIViewTestMixin:
                 'app_label': self.test_object_content_type.app_label,
                 'model_name': self.test_object_content_type.model,
                 'object_id': self.test_object.pk,
-                'pk': self.test_acl.pk
+                'acl_id': self.test_acl.pk
             }
         )
 
@@ -39,7 +48,7 @@ class ACLAPIViewTestMixin:
                 'app_label': self.test_object_content_type.app_label,
                 'model_name': self.test_object_content_type.model,
                 'object_id': self.test_object.pk,
-                'pk': self.test_acl.pk
+                'acl_id': self.test_acl.pk
             }
         )
 
@@ -52,46 +61,42 @@ class ACLAPIViewTestMixin:
             }
         )
 
-    def _request_test_acl_permission_delete_api_view(self):
-        return self.delete(
-            viewname='rest_api:accesscontrollist-permission-detail', kwargs={
-                'app_label': self.test_object_content_type.app_label,
-                'model_name': self.test_object_content_type.model,
-                'object_id': self.test_object.pk,
-                'pk': self.test_acl.pk,
-                'permission_pk': self.test_permission.stored_permission.pk
-            }
-        )
-
-    def _request_test_acl_permission_detail_api_view(self):
-        return self.get(
-            viewname='rest_api:accesscontrollist-permission-detail', kwargs={
-                'app_label': self.test_object_content_type.app_label,
-                'model_name': self.test_object_content_type.model,
-                'object_id': self.test_object.pk,
-                'pk': self.test_acl.pk,
-                'permission_pk': self.test_acl.permissions.first().pk
-            }
-        )
-
-    def _request_test_acl_permission_list_api_get_view(self):
-        return self.get(
-            viewname='rest_api:accesscontrollist-permission-list', kwargs={
-                'app_label': self.test_object_content_type.app_label,
-                'model_name': self.test_object_content_type.model,
-                'object_id': self.test_object.pk,
-                'pk': self.test_acl.pk
-            }
-        )
-
-    def _request_test_acl_permission_list_api_post_view(self):
+    def _request_test_acl_permission_add_api_view(self):
         return self.post(
+            viewname='rest_api:accesscontrollist-permission-add', kwargs={
+                'app_label': self.test_object_content_type.app_label,
+                'model_name': self.test_object_content_type.model,
+                'object_id': self.test_object.pk,
+                'acl_id': self.test_acl.pk
+            }, data={'permission': self.test_permission.pk}
+        )
+
+    def _request_test_acl_permission_list_api_view(self):
+        return self.get(
             viewname='rest_api:accesscontrollist-permission-list', kwargs={
                 'app_label': self.test_object_content_type.app_label,
                 'model_name': self.test_object_content_type.model,
                 'object_id': self.test_object.pk,
-                'pk': self.test_acl.pk
-            }, data={'permission_pk': self.test_permission.pk}
+                'acl_id': self.test_acl.pk
+            }
+        )
+
+    def _request_test_acl_permission_remove_api_view(self):
+        return self.post(
+            viewname='rest_api:accesscontrollist-permission-remove', kwargs={
+                'app_label': self.test_object_content_type.app_label,
+                'model_name': self.test_object_content_type.model,
+                'object_id': self.test_object.pk,
+                'acl_id': self.test_acl.pk
+            }, data={'permission': self.test_permission.pk}
+        )
+
+    def _request_test_class_permission_list_api_view(self):
+        return self.get(
+            viewname='rest_api:class-permission-list', kwargs={
+                'app_label': self.test_object_content_type.app_label,
+                'model_name': self.test_object_content_type.model,
+            }
         )
 
 
@@ -109,6 +114,11 @@ class ACLTestCaseMixin(RoleTestCaseMixin, UserTestCaseMixin):
             )
 
         self._test_case_acl = AccessControlList.objects.grant(
+            obj=obj, permission=permission, role=self._test_case_role
+        )
+
+    def revoke_access(self, obj, permission):
+        self._test_case_acl = AccessControlList.objects.revoke(
             obj=obj, permission=permission, role=self._test_case_role
         )
 
@@ -168,12 +178,23 @@ class AccessControlListViewTestMixin:
         )
 
     def _request_test_acl_create_post_view(self):
-        return self.post(
+        pk_list = list(AccessControlList.objects.values_list('pk', flat=True))
+
+        response = self.post(
             viewname='acls:acl_create',
             kwargs=self.test_object_view_kwargs, data={
                 'role': self.test_role.pk
             }
         )
+
+        try:
+            self.test_acl = AccessControlList.objects.get(
+                ~Q(pk__in=pk_list)
+            )
+        except AccessControlList.DoesNotExist:
+            self.test_acl = None
+
+        return response
 
     def _request_test_acl_delete_view(self):
         return self.post(
@@ -191,4 +212,30 @@ class AccessControlListViewTestMixin:
             viewname='acls:acl_permissions', kwargs={
                 'acl_id': self.test_acl.pk
             }
+
+        )
+
+    def _request_test_acl_permission_add_view(self):
+        return self.post(
+            viewname='acls:acl_permissions', kwargs={
+                'acl_id': self.test_acl.pk,
+            }, data={
+                'available-submit': 'true',
+                'available-selection': self.test_permission.stored_permission.pk
+            }
+        )
+
+    def _request_test_acl_permission_remove_view(self):
+        return self.post(
+            viewname='acls:acl_permissions', kwargs={
+                'acl_id': self.test_acl.pk,
+            }, data={
+                'added-submit': 'true',
+                'added-selection': self.test_permission.stored_permission.pk
+            }
+        )
+
+    def _request_test_global_acl_list_view(self):
+        return self.get(
+            viewname='acls:global_acl_list',
         )

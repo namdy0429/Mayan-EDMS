@@ -7,7 +7,7 @@ from django.utils.translation import ugettext_lazy as _
 
 from mayan.apps.acls.models import AccessControlList
 from mayan.apps.common.literals import TIME_DELTA_UNIT_CHOICES
-from mayan.apps.common.mixins import ModelInstanceExtraDataAPIViewMixin
+from mayan.apps.common.model_mixins import ExtraDataModelMixin
 from mayan.apps.common.serialization import yaml_load
 from mayan.apps.common.validators import YAMLValidator
 from mayan.apps.events.classes import (
@@ -31,7 +31,7 @@ __all__ = ('DocumentType', 'DocumentTypeFilename')
 logger = logging.getLogger(name=__name__)
 
 
-class DocumentType(ModelInstanceExtraDataAPIViewMixin, models.Model):
+class DocumentType(ExtraDataModelMixin, models.Model):
     """
     Define document types or classes to which a specific set of
     properties can be attached
@@ -149,7 +149,9 @@ class DocumentType(ModelInstanceExtraDataAPIViewMixin, models.Model):
                 label=label or file_object.name,
                 language=language or setting_language.value
             )
-            document.save(_user=_user)
+            document._event_keep_attributes = ('_event_actor',)
+            document._event_actor = _user
+            document.save()
         except Exception as exception:
             logger.critical(
                 'Unexpected exception while trying to create new document '
@@ -160,7 +162,7 @@ class DocumentType(ModelInstanceExtraDataAPIViewMixin, models.Model):
         else:
             try:
                 document_file = document.file_new(
-                    file_object=file_object, _user=_user
+                    file_object=file_object, filename=label, _user=_user
                 )
             except Exception as exception:
                 logger.critical(
@@ -187,7 +189,7 @@ class DocumentType(ModelInstanceExtraDataAPIViewMixin, models.Model):
         return super().save(*args, **kwargs)
 
 
-class DocumentTypeFilename(ModelInstanceExtraDataAPIViewMixin, models.Model):
+class DocumentTypeFilename(ExtraDataModelMixin, models.Model):
     """
     List of labels available to a specific document type for the
     quick rename functionality

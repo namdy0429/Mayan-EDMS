@@ -16,8 +16,8 @@ from mayan.apps.documents.tasks import task_document_file_upload
 from mayan.apps.metadata.models import MetadataType
 from mayan.apps.storage.models import SharedUploadedFile
 
+from ..classes import DocumentCreateWizardStep
 from ..tasks import task_process_document_upload
-from ..wizards import WizardStep
 
 from .literals import (
     DEFAULT_EMAIL_METADATA_ATTACHMENT_NAME, DEFAULT_PERIOD_INTERVAL,
@@ -463,7 +463,7 @@ class SourceBackendInteractiveMixin:
     is_interactive = True
 
     def callback(self, document_file, **kwargs):
-        WizardStep.post_upload_process(
+        DocumentCreateWizardStep.post_upload_process(
             document=document_file.document,
             query_string=kwargs.get('query_string', {})
         )

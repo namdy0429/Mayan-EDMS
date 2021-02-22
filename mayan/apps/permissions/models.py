@@ -8,6 +8,9 @@ from django.utils.encoding import force_text
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 
+from mayan.apps.common.model_mixins import ExtraDataModelMixin
+from mayan.apps.events.classes import EventManagerSave
+from mayan.apps.events.decorators import method_event
 from mayan.apps.user_management.events import event_group_edited
 from mayan.apps.user_management.permissions import permission_group_view
 
@@ -18,77 +21,7 @@ from .managers import RoleManager, StoredPermissionManager
 logger = logging.getLogger(name=__name__)
 
 
-class StoredPermission(models.Model):
-    """
-    This model is the counterpart of the permissions.classes.Permission
-    class. Allows storing a database counterpart of a permission class.
-    It is used to store the permissions help by a role or in an ACL.
-    """
-    namespace = models.CharField(max_length=64, verbose_name=_('Namespace'))
-    name = models.CharField(max_length=64, verbose_name=_('Name'))
-
-    objects = StoredPermissionManager()
-
-    class Meta:
-        ordering = ('namespace',)
-        unique_together = ('namespace', 'name')
-        verbose_name = _('Permission')
-        verbose_name_plural = _('Permissions')
-
-    def __str__(self):
-        try:
-            return force_text(s=self.volatile_permission)
-        except KeyError:
-            return self.name
-
-    @cached_property
-    def volatile_permission_id(self):
-        """
-        Return the identifier of the real permission class represented by
-        this model instance.
-        """
-        return '{}.{}'.format(self.namespace, self.name)
-
-    @cached_property
-    def volatile_permission(self):
-        """
-        Returns the real class of the permission represented by this model
-        instance.
-        """
-        return Permission.get(
-            pk=self.volatile_permission_id, class_only=True
-        )
-
-    def natural_key(self):
-        return (self.namespace, self.name)
-
-    def user_has_this(self, user):
-        """
-        Helper method to check if a user has been granted this permission.
-        The check is done sequentially over all of the user's groups and
-        roles. The check is interrupted at the first positive result.
-        The check always returns True for superusers or staff users.
-        """
-        if user.is_superuser or user.is_staff:
-            logger.debug(
-                'Permission "%s" granted to user "%s" as superuser or staff',
-                self, user
-            )
-            return True
-
-        if not user.is_authenticated:
-            return False
-
-        if Role.objects.filter(groups__user=user, permissions=self).exists():
-            return True
-        else:
-            logger.debug(
-                'Fallthru: Permission "%s" not granted to user "%s"', self, user
-            )
-            return False
-
-
-class Role(models.Model):
+class Role(ExtraDataModelMixin, models.Model):
     """
     This model represents a Role. Roles are permission units. They are the
     only object to which permissions can be granted. They are themselves
@@ -101,7 +34,7 @@ class Role(models.Model):
         unique=True, verbose_name=_('Label')
     )
     permissions = models.ManyToManyField(
-        related_name='roles', to=StoredPermission,
+        related_name='roles', to='StoredPermission',
         verbose_name=_('Permissions')
     )
     groups = models.ManyToManyField(
@@ -196,17 +129,86 @@ class Role(models.Model):
     def revoke(self, permission):
         self.permissions.remove(permission.stored_permission)
 
+    @method_event(
+        event_manager_class=EventManagerSave,
+        created={
+            'event': event_role_created,
+            'target': 'self',
+        },
+        edited={
+            'event': event_role_edited,
+            'target': 'self',
+        }
+    )
     def save(self, *args, **kwargs):
-        _user = kwargs.pop('_user', None)
+        return super().save(*args, **kwargs)
 
-        with transaction.atomic():
-            is_new = not self.pk
-            super().save(*args, **kwargs)
-            if is_new:
-                event_role_created.commit(
-                    actor=_user, target=self
-                )
-            else:
-                event_role_edited.commit(
-                    actor=_user, target=self
-                )
+
+class StoredPermission(models.Model):
+    """
+    This model is the counterpart of the permissions.classes.Permission
+    class. Allows storing a database counterpart of a permission class.
+    It is used to store the permissions help by a role or in an ACL.
+    """
+    namespace = models.CharField(max_length=64, verbose_name=_('Namespace'))
+    name = models.CharField(max_length=64, verbose_name=_('Name'))
+
+    objects = StoredPermissionManager()
+
+    class Meta:
+        ordering = ('namespace',)
+        unique_together = ('namespace', 'name')
+        verbose_name = _('Permission')
+        verbose_name_plural = _('Permissions')
+
+    def __str__(self):
+        try:
+            return force_text(s=self.volatile_permission)
+        except KeyError:
+            return self.name
+
+    @cached_property
+    def volatile_permission_id(self):
+        """
+        Return the identifier of the real permission class represented by
+        this model instance.
+        """
+        return '{}.{}'.format(self.namespace, self.name)
+
+    @cached_property
+    def volatile_permission(self):
+        """
+        Returns the real class of the permission represented by this model
+        instance.
+        """
+        return Permission.get(
+            pk=self.volatile_permission_id, class_only=True
+        )
+
+    def natural_key(self):
+        return (self.namespace, self.name)
+
+    def user_has_this(self, user):
+        """
+        Helper method to check if a user has been granted this permission.
+        The check is done sequentially over all of the user's groups and
+        roles. The check is interrupted at the first positive result.
+        The check always returns True for superusers or staff users.
+        """
+        if user.is_superuser or user.is_staff:
+            logger.debug(
+                'Permission "%s" granted to user "%s" as superuser or staff',
+                self, user
+            )
+            return True
+
+        if not user.is_authenticated:
+            return False
+
+        if Role.objects.filter(groups__user=user, permissions=self).exists():
+            return True
+        else:
+            logger.debug(
+                'Fallthru: Permission "%s" not granted to user "%s"', self, user
+            )
+            return False

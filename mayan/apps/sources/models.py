@@ -6,7 +6,7 @@ from django.db import models, transaction
 from django.utils.encoding import force_text
 from django.utils.translation import ugettext_lazy as _
 
-from mayan.apps.common.mixins import BackendModelMixin
+from mayan.apps.common.model_mixins import BackendModelMixin
 from mayan.apps.converter.layers import layer_saved_transformations
 from mayan.apps.documents.models.document_models import Document
 from mayan.apps.documents.tasks import task_document_upload

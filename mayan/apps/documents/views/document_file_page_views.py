@@ -14,7 +14,7 @@ from mayan.apps.converter.literals import DEFAULT_ROTATION, DEFAULT_ZOOM_LEVEL
 from mayan.apps.views.generics import (
     MultipleObjectConfirmActionView, SimpleView, SingleObjectListView
 )
-from mayan.apps.views.mixins import ExternalObjectMixin
+from mayan.apps.views.mixins import ExternalObjectViewMixin
 from mayan.apps.views.utils import resolve
 
 from ..forms.document_file_page_forms import DocumentFilePageForm
@@ -44,9 +44,9 @@ logger = logging.getLogger(name=__name__)
 
 
 class DocumentFilePageCountUpdateView(MultipleObjectConfirmActionView):
-    model = DocumentFile
     object_permission = permission_document_file_tools
     pk_url_kwarg = 'document_file_id'
+    source_queryset = DocumentFile.valid
     success_message = _(
         '%(count)d document file queued for page count recalculation.'
     )
@@ -83,10 +83,10 @@ class DocumentFilePageCountUpdateView(MultipleObjectConfirmActionView):
         )
 
 
-class DocumentFilePageListView(ExternalObjectMixin, SingleObjectListView):
-    external_object_class = DocumentFile
+class DocumentFilePageListView(ExternalObjectViewMixin, SingleObjectListView):
     external_object_permission = permission_document_file_view
     external_object_pk_url_kwarg = 'document_file_id'
+    external_object_queryset = DocumentFile.valid
 
     def get_extra_context(self):
         return {
@@ -113,10 +113,10 @@ class DocumentFilePageListView(ExternalObjectMixin, SingleObjectListView):
         return queryset.filter(pk__in=self.external_object.pages.all())
 
 
-class DocumentFilePageNavigationBase(ExternalObjectMixin, RedirectView):
-    external_object_class = DocumentFilePage
+class DocumentFilePageNavigationBase(ExternalObjectViewMixin, RedirectView):
     external_object_permission = permission_document_file_view
     external_object_pk_url_kwarg = 'document_file_page_id'
+    external_object_queryset = DocumentFilePage.valid
 
     def get_redirect_url(self, *args, **kwargs):
         """
@@ -157,12 +157,16 @@ class DocumentFilePageNavigationBase(ExternalObjectMixin, RedirectView):
 
 class DocumentFilePageNavigationFirst(DocumentFilePageNavigationBase):
     def get_new_kwargs(self):
-        return {'document_file_page_id': self.external_object.siblings.first().pk}
+        return {
+            'document_file_page_id': self.external_object.siblings.first().pk
+        }
 
 
 class DocumentFilePageNavigationLast(DocumentFilePageNavigationBase):
     def get_new_kwargs(self):
-        return {'document_file_page_id': self.external_object.siblings.last().pk}
+        return {
+            'document_file_page_id': self.external_object.siblings.last().pk
+        }
 
 
 class DocumentFilePageNavigationNext(DocumentFilePageNavigationBase):
@@ -197,10 +201,10 @@ class DocumentFilePageNavigationPrevious(DocumentFilePageNavigationBase):
             return {'document_file_page_id': self.external_object.pk}
 
 
-class DocumentFilePageView(ExternalObjectMixin, SimpleView):
-    external_object_class = DocumentFilePage
+class DocumentFilePageView(ExternalObjectViewMixin, SimpleView):
     external_object_permission = permission_document_file_view
     external_object_pk_url_kwarg = 'document_file_page_id'
+    external_object_queryset = DocumentFilePage.valid
     template_name = 'appearance/generic_form.html'
 
     def get_extra_context(self):
@@ -233,10 +237,12 @@ class DocumentFilePageViewResetView(RedirectView):
     pattern_name = 'documents:document_file_page_view'
 
 
-class DocumentFilePageInteractiveTransformation(ExternalObjectMixin, RedirectView):
-    external_object_class = DocumentFilePage
+class DocumentFilePageInteractiveTransformation(
+    ExternalObjectViewMixin, RedirectView
+):
     external_object_permission = permission_document_file_view
     external_object_pk_url_kwarg = 'document_file_page_id'
+    external_object_queryset = DocumentFilePage.valid
 
     def get_object(self):
         return self.external_object

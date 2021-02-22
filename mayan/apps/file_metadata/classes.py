@@ -1,7 +1,6 @@
 import logging
 
 from django.apps import apps
-from django.db import transaction
 
 from mayan.apps.common.classes import PropertyHelper
 
@@ -19,7 +18,6 @@ class FileMetadataHelper(PropertyHelper):
         return FileMetadataHelper(*args, **kwargs)
 
     def get_result(self, name):
-        name = name.replace('_', '.')
         result = self.instance.get_file_metadata(dotted_name=name)
         return result
 
@@ -40,25 +38,23 @@ class FileMetadataDriver:
 
                 driver.initialize()
 
-                with transaction.atomic():
-                    driver.process(document_file=document_file)
-                    event_file_metadata_document_file_finish.commit(
-                        action_object=document_file.document,
-                        target=document_file
-                    )
+                driver.process(document_file=document_file)
 
-                    transaction.on_commit(
-                        lambda: signal_post_document_file_file_metadata_processing.send(
-                            sender=document_file.__class__,
-                            instance=document_file
-                        )
-                    )
+                signal_post_document_file_file_metadata_processing.send(
+                    sender=document_file.__class__,
+                    instance=document_file
+                )
+
+                event_file_metadata_document_file_finish.commit(
+                    action_object=document_file.document,
+                    target=document_file
+                )
+
             except FileMetadataDriverError:
-                # If driver raises error, try next in the list
-                pass
+                """If driver raises error, try next in the list."""
             else:
-                # If driver was successfull there is no need to try
-                # others in the list for this mimetype
+                # If driver was successful there is no need to try
+                # others in the list for this mimetype.
                 return
 
     @classmethod

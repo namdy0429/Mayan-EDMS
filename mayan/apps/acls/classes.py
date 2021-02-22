@@ -7,6 +7,7 @@ from django.utils.encoding import force_text
 from django.utils.translation import ugettext_lazy as _
 
 from mayan.apps.common.utils import get_related_field
+from mayan.apps.events.classes import EventModelRegistry
 
 logger = logging.getLogger(name=__name__)
 
@@ -87,7 +88,7 @@ class ModelPermission:
         return StoredPermission.objects.filter(pk__in=pks)
 
     @classmethod
-    def get_inheritance(cls, model):
+    def get_inheritances(cls, model):
         # Proxy models get the inheritance from their base model
         if model._meta.proxy:
             model = model._meta.proxy_for_model
@@ -145,6 +146,9 @@ class ModelPermission:
 
         ModelCopy.add_fields_lazy(model=model, field_names=('acls',))
 
+        # Allow the model to be used as the action_object for the ACL events.
+        EventModelRegistry.register(model=model)
+
     @classmethod
     def register_field_query_function(cls, model, function):
         cls._field_query_functions[model] = function
@@ -157,7 +161,8 @@ class ModelPermission:
         cls._inheritances_reverse.setdefault(model_reverse, [])
         cls._inheritances_reverse[model_reverse].append(model)
 
-        cls._inheritances[model] = related
+        cls._inheritances.setdefault(model, [])
+        cls._inheritances[model].append(related)
 
     @classmethod
     def register_manager(cls, model, manager_name):

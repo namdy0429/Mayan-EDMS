@@ -4,15 +4,14 @@ import logging
 from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.db import models
-from django.db.models import F, Max
 from django.utils.encoding import force_text
 from django.utils.timezone import now
 
 from mayan.apps.common.classes import ModelQueryFields
 
 from .settings import (
-    setting_favorite_count, setting_recent_access_count,
-    setting_recent_created_document_count, setting_stub_expiration_interval
+    setting_favorite_count, setting_recently_accessed_document_count,
+    setting_recently_created_document_count, setting_stub_expiration_interval
 )
 
 logger = logging.getLogger(name=__name__)
@@ -29,7 +28,7 @@ class DocumentManager(models.Manager):
             stale_stub_document.delete(to_trash=False)
 
     def get_by_natural_key(self, uuid):
-        return self.get(uuid=force_text(uuid))
+        return self.get(uuid=force_text(s=uuid))
 
 
 class DocumentFileManager(models.Manager):
@@ -127,83 +126,6 @@ class DocumentTypeManager(models.Manager):
         return self.get(label=label)
 
 
-class DuplicatedDocumentManager(models.Manager):
-    def clean_empty_duplicate_lists(self):
-        self.filter(documents=None).delete()
-
-    def get_duplicated_documents(self):
-        Document = apps.get_model(
-            app_label='documents', model_name='Document'
-        )
-        return Document.valid.filter(
-            pk__in=self.filter(documents__in_trash=False).values(
-                'document_id'
-            )
-        )
-
-    def get_duplicates_of(self, document):
-        Document = apps.get_model(
-            app_label='documents', model_name='Document'
-        )
-
-        try:
-            queryset = self.get(
-                document=document
-            ).documents.all()
-
-            return Document.valid.filter(
-                pk__in=queryset
-            )
-        except self.model.DoesNotExist:
-            return Document.objects.none()
-
-    def scan(self):
-        """
-        Find duplicates by iterating over all documents and then
-        find matching latest files checksums
-        """
-        Document = apps.get_model(
-            app_label='documents', model_name='Document'
-        )
-
-        for document in Document.valid.all():
-            self.scan_for(document=document, scan_children=False)
-
-    def scan_for(self, document, scan_children=True):
-        """
-        Find duplicates by matching latest file checksums
-        """
-        if not document.file_latest:
-            return None
-
-        Document = apps.get_model(
-            app_label='documents', model_name='Document'
-        )
-
-        # Get the documents whose latest file matches the checksum
-        # of the current document and exclude the current document
-
-        ###DISABLED
-        ##TODO: redefine what is a duplicate
-        """
-        duplicates = Document.objects.annotate(
-            max_timestamp=Max('files__timestamp')
-        ).filter(
-            files__timestamp=F('max_timestamp'),
-            files__checksum=document.checksum
-        ).exclude(pk=document.pk)
-
-        if duplicates.exists():
-            instance, created = self.get_or_create(document=document)
-            instance.documents.add(*duplicates)
-        else:
-            self.filter(document=document).delete()
-
-        if scan_children:
-            for document in duplicates:
-                self.scan_for(document=document, scan_children=False)
-        """
-
 class FavoriteDocumentManager(models.Manager):
     def add_for_user(self, user, document):
         favorite_document, created = self.model.objects.get_or_create(
@@ -219,13 +141,17 @@ class FavoriteDocumentManager(models.Manager):
 
         return favorite_document
 
-    def get_by_natural_key(self, datetime_accessed, document_natural_key, user_natural_key):
+    def get_by_natural_key(
+        self, datetime_accessed, document_natural_key, user_natural_key
+    ):
         Document = apps.get_model(
             app_label='documents', model_name='Document'
         )
         User = get_user_model()
         try:
-            document = Document.objects.get_by_natural_key(*document_natural_key)
+            document = Document.objects.get_by_natural_key(
+                *document_natural_key
+            )
         except Document.DoesNotExist:
             raise self.model.DoesNotExist
         else:
@@ -241,7 +167,7 @@ class FavoriteDocumentManager(models.Manager):
             app_label='documents', model_name='Document'
         )
 
-        return Document.objects.filter(favorites__user=user)
+        return Document.valid.filter(favorites__user=user)
 
     def remove_for_user(self, user, document):
         self.get(user=user, document=document).delete()
@@ -258,17 +184,25 @@ class RecentlyAccessedDocumentManager(models.Manager):
                 # accessed date and time update
                 new_recent.save()
 
-            recent_to_delete = self.filter(user=user).values_list('pk', flat=True)[setting_recent_access_count.value:]
+            recent_to_delete = self.filter(user=user).values_list(
+                'pk', flat=True
+            )[
+                setting_recently_accessed_document_count.value:
+            ]
             self.filter(pk__in=list(recent_to_delete)).delete()
         return new_recent
 
-    def get_by_natural_key(self, datetime_accessed, document_natural_key, user_natural_key):
+    def get_by_natural_key(
+        self, datetime_accessed, document_natural_key, user_natural_key
+    ):
         Document = apps.get_model(
             app_label='documents', model_name='Document'
         )
         User = get_user_model()
         try:
-            document = Document.objects.get_by_natural_key(*document_natural_key)
+            document = Document.objects.get_by_natural_key(
+                *document_natural_key
+            )
         except Document.DoesNotExist:
             raise self.model.DoesNotExist
         else:
@@ -288,7 +222,7 @@ class RecentlyAccessedDocumentManager(models.Manager):
         )
 
         if user.is_authenticated:
-            return Document.objects.filter(
+            return Document.valid.filter(
                 recent__user=user
             ).order_by('-recent__datetime_accessed')
         else:
@@ -303,11 +237,11 @@ class RecentlyCreatedDocumentManager(models.Manager):
 
         queryset = ModelQueryFields.get(
             model=RecentlyCreatedDocument
-        ).get_queryset()
+        ).get_queryset(manager_name='valid')
 
         return queryset.filter(
             pk__in=queryset.order_by('-datetime_created')[
-                :setting_recent_created_document_count.value
+                :setting_recently_created_document_count.value
             ].values('pk')
         ).order_by('-datetime_created')
 
@@ -327,4 +261,36 @@ class ValidDocumentManager(models.Manager):
     def get_queryset(self):
         return super().get_queryset().filter(
             in_trash=False
+        )
+
+
+class ValidDocumentFileManager(models.Manager):
+    def get_queryset(self):
+        return models.QuerySet(
+            model=self.model, using=self._db
+        ).filter(document__in_trash=False)
+
+
+class ValidDocumentFilePageManager(models.Manager):
+    def get_queryset(self):
+        return models.QuerySet(
+            model=self.model, using=self._db
+        ).filter(
+            document_file__document__in_trash=False
+        )
+
+
+class ValidDocumentVersionManager(models.Manager):
+    def get_queryset(self):
+        return models.QuerySet(
+            model=self.model, using=self._db
+        ).filter(document__in_trash=False)
+
+
+class ValidDocumentVersionPageManager(models.Manager):
+    def get_queryset(self):
+        return models.QuerySet(
+            model=self.model, using=self._db
+        ).filter(
+            document_version__document__in_trash=False
         )

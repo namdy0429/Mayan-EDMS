@@ -9,7 +9,7 @@ from mayan.apps.views.generics import (
     FormView, SingleObjectCreateView, SingleObjectDeleteView,
     SingleObjectEditView, SingleObjectListView
 )
-from mayan.apps.views.mixins import ExternalObjectMixin
+from mayan.apps.views.mixins import ExternalObjectViewMixin
 
 from ..forms import (
     WorkflowTransitionForm, WorkflowTransitionTriggerEventRelationshipFormSet
@@ -23,7 +23,9 @@ from ..models import Workflow, WorkflowTransition, WorkflowTransitionField
 from ..permissions import permission_workflow_edit, permission_workflow_view
 
 
-class WorkflowTemplateTransitionCreateView(ExternalObjectMixin, SingleObjectCreateView):
+class WorkflowTemplateTransitionCreateView(
+    ExternalObjectViewMixin, SingleObjectCreateView
+):
     external_object_class = Workflow
     external_object_permission = permission_workflow_edit
     external_object_pk_url_kwarg = 'workflow_template_id'
@@ -123,7 +125,9 @@ class WorkflowTemplateTransitionEditView(SingleObjectEditView):
         )
 
 
-class WorkflowTemplateTransitionListView(ExternalObjectMixin, SingleObjectListView):
+class WorkflowTemplateTransitionListView(
+    ExternalObjectViewMixin, SingleObjectListView
+):
     external_object_class = Workflow
     external_object_permission = permission_workflow_view
     external_object_pk_url_kwarg = 'workflow_template_id'
@@ -156,7 +160,9 @@ class WorkflowTemplateTransitionListView(ExternalObjectMixin, SingleObjectListVi
         return self.external_object.transitions.all()
 
 
-class WorkflowTemplateTransitionTriggerEventListView(ExternalObjectMixin, FormView):
+class WorkflowTemplateTransitionTriggerEventListView(
+    ExternalObjectViewMixin, FormView
+):
     external_object_class = WorkflowTransition
     external_object_permission = permission_workflow_edit
     external_object_pk_url_kwarg = 'workflow_template_transition_id'
@@ -231,7 +237,7 @@ class WorkflowTemplateTransitionTriggerEventListView(ExternalObjectMixin, FormVi
 
 
 class WorkflowTemplateTransitionFieldCreateView(
-    ExternalObjectMixin, SingleObjectCreateView
+    ExternalObjectViewMixin, SingleObjectCreateView
 ):
     external_object_class = WorkflowTransition
     external_object_permission = permission_workflow_edit
@@ -333,7 +339,9 @@ class WorkflowTemplateTransitionFieldEditView(SingleObjectEditView):
         )
 
 
-class WorkflowTemplateTransitionFieldListView(ExternalObjectMixin, SingleObjectListView):
+class WorkflowTemplateTransitionFieldListView(
+    ExternalObjectViewMixin, SingleObjectListView
+):
     external_object_class = WorkflowTransition
     external_object_permission = permission_workflow_edit
     external_object_pk_url_kwarg = 'workflow_template_transition_id'

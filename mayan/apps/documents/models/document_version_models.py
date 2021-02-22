@@ -1,6 +1,8 @@
 import logging
 import os
 
+from furl import furl
+
 from django.apps import apps
 from django.db import models, transaction
 from django.urls import reverse
@@ -8,16 +10,21 @@ from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 
 from mayan.apps.common.classes import ModelQueryFields
-from mayan.apps.common.mixins import ModelInstanceExtraDataAPIViewMixin
+from mayan.apps.common.model_mixins import ExtraDataModelMixin
+from mayan.apps.common.settings import setting_project_url
 from mayan.apps.events.classes import EventManagerMethodAfter, EventManagerSave
 from mayan.apps.events.decorators import method_event
+from mayan.apps.messaging.models import Message
+from mayan.apps.storage.models import DownloadFile
 from mayan.apps.templating.classes import Template
 
 from ..events import (
     event_document_version_created, event_document_version_deleted,
-    event_document_version_edited
+    event_document_version_edited, event_document_version_exported
 )
 from ..literals import STORAGE_NAME_DOCUMENT_VERSION_PAGE_IMAGE_CACHE
+from ..managers import ValidDocumentVersionManager
+from ..permissions import permission_document_version_export
 from ..signals import signal_post_document_version_remap
 
 from .document_models import Document
@@ -26,7 +33,7 @@ __all__ = ('DocumentVersion', 'DocumentVersionSearchResult')
 logger = logging.getLogger(name=__name__)
 
 
-class DocumentVersion(ModelInstanceExtraDataAPIViewMixin, models.Model):
+class DocumentVersion(ExtraDataModelMixin, models.Model):
     document = models.ForeignKey(
         on_delete=models.CASCADE, related_name='versions', to=Document,
         verbose_name=_('Document')
@@ -51,6 +58,9 @@ class DocumentVersion(ModelInstanceExtraDataAPIViewMixin, models.Model):
         ordering = ('timestamp',)
         verbose_name = _('Document version')
         verbose_name_plural = _('Document versions')
+
+    objects = models.Manager()
+    valid = ValidDocumentVersionManager()
 
     @staticmethod
     def annotate_content_object_list(content_object_list, start_page_number=None):
@@ -107,10 +117,59 @@ class DocumentVersion(ModelInstanceExtraDataAPIViewMixin, models.Model):
 
     def export(self, file_object):
         first_page = self.pages.first()
-        first_page.export(file_object=file_object)
 
-        for page in self.pages[1:]:
-            page.export(append=True, file_object=file_object)
+        # Only export the version if there is at least one page.
+        if first_page:
+            first_page.export(file_object=file_object)
+
+            for page in self.pages[1:]:
+                page.export(append=True, file_object=file_object)
+
+    def export_to_download_file(self, user=None):
+        download_file = DownloadFile(
+            content_object=self, filename='{}.pdf'.format(self),
+            label=_('Document version export to PDF'),
+            permission=permission_document_version_export.stored_permission
+        )
+        download_file._event_actor = user
+        download_file.save()
+
+        with download_file.open(mode='wb+') as file_object:
+            self.export(file_object=file_object)
+
+        event_document_version_exported.commit(
+            action_object=download_file, actor=user,
+            target=self
+        )
+
+        if user:
+            download_list_url = furl(setting_project_url.value).join(
+                reverse(
+                    viewname='storage:download_file_list'
+                )
+            ).tostr()
+            download_url = furl(setting_project_url.value).join(
+                reverse(
+                    viewname='storage:download_file_download',
+                    kwargs={'download_file_id': download_file.pk}
+                )
+            ).tostr()
+
+            Message.objects.create(
+                sender_object=download_file,
+                user=user,
+                subject=_('Document exported.'),
+                body=_(
+                    'Document version "%(document_version)s" has been '
+                    'exported and is available for download using the '
+                    'link: %(download_url)s or from '
+                    'the downloads area (%(download_list_url)s).'
+                ) % {
+                    'download_list_url': download_list_url,
+                    'download_url': download_url,
+                    'document_version': self
+                }
+            )
 
     def get_absolute_url(self):
         return reverse(
@@ -156,13 +215,6 @@ class DocumentVersion(ModelInstanceExtraDataAPIViewMixin, models.Model):
         return self.document.is_in_trash
 
     @property
-    def page_count(self):
-        """
-        The number of pages that the document posses.
-        """
-        return self.pages.count()
-
-    @property
     def page_content_objects(self):
         result = []
         for page in self.pages.all():
@@ -178,7 +230,11 @@ class DocumentVersion(ModelInstanceExtraDataAPIViewMixin, models.Model):
         queryset = ModelQueryFields.get(model=DocumentVersionPage).get_queryset()
         return queryset.filter(pk__in=self.version_pages.all())
 
-    def pages_remap(self, annotated_content_object_list=None):
+    def pages_remap(self, annotated_content_object_list=None, _user=None):
+        DocumentVersionPage = apps.get_model(
+            app_label='documents', model_name='DocumentVersionPage'
+        )
+
         for page in self.pages.all():
             page.delete()
 
@@ -186,10 +242,13 @@ class DocumentVersion(ModelInstanceExtraDataAPIViewMixin, models.Model):
             annotated_content_object_list = ()
 
         for content_object_entry in annotated_content_object_list:
-            self.version_pages.create(
+            version_page = DocumentVersionPage(
+                document_version=self,
                 content_object=content_object_entry['content_object'],
                 page_number=content_object_entry['page_number']
             )
+            version_page._event_actor = _user
+            version_page.save()
 
         signal_post_document_version_remap.send(
             sender=DocumentVersion, instance=self

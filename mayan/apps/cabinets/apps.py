@@ -10,17 +10,14 @@ from mayan.apps.common.menus import (
     menu_secondary
 )
 from mayan.apps.events.classes import EventModelRegistry, ModelEventType
-from mayan.apps.events.links import (
-    link_events_for_object, link_object_event_types_user_subcriptions_list,
-)
 from mayan.apps.events.permissions import permission_events_view
 from mayan.apps.navigation.classes import SourceColumn
 
 from .events import (
-    event_cabinet_edited, event_cabinet_add_document,
-    event_cabinet_remove_document
+    event_cabinet_edited, event_cabinet_document_added,
+    event_cabinet_document_removed
 )
-from .html_widgets import widget_document_cabinets
+from .html_widgets import DocumentCabinetWidget
 from .links import (
     link_cabinet_list, link_document_cabinet_list,
     link_document_cabinet_remove, link_document_cabinet_add,
@@ -54,7 +51,6 @@ class CabinetsApp(MayanAppConfig):
 
     def ready(self):
         super().ready()
-        from .wizard_steps import WizardStepCabinets  # NOQA
 
         Cabinet = self.get_model(model_name='Cabinet')
         CabinetSearchResult = self.get_model(model_name='CabinetSearchResult')
@@ -62,12 +58,18 @@ class CabinetsApp(MayanAppConfig):
             app_label='documents', model_name='Document'
         )
         DocumentCabinet = self.get_model(model_name='DocumentCabinet')
-        #DocumentFilePageResult = apps.get_model(
-        #    app_label='documents', model_name='DocumentFilePageResult'
-        #)
-        #DocumentVersionPageResult = apps.get_model(
-        #    app_label='documents', model_name='DocumentVersionPageResult'
-        #)
+        DocumentFileSearchResult = apps.get_model(
+            app_label='documents', model_name='DocumentFileSearchResult'
+        )
+        DocumentFilePageSearchResult = apps.get_model(
+            app_label='documents', model_name='DocumentFilePageSearchResult'
+        )
+        DocumentVersionSearchResult = apps.get_model(
+            app_label='documents', model_name='DocumentVersionSearchResult'
+        )
+        DocumentVersionPageSearchResult = apps.get_model(
+            app_label='documents', model_name='DocumentVersionPageSearchResult'
+        )
 
         # Add explicit order_by as DocumentCabinet ordering Meta option has no
         # effect.
@@ -97,15 +99,15 @@ class CabinetsApp(MayanAppConfig):
 
         ModelEventType.register(
             model=Cabinet, event_types=(
-                event_cabinet_edited, event_cabinet_add_document,
-                event_cabinet_remove_document
+                event_cabinet_edited, event_cabinet_document_added,
+                event_cabinet_document_removed
             )
         )
 
         ModelPermission.register(
             model=Document, permissions=(
                 permission_cabinet_add_document,
-                permission_cabinet_remove_document,
+                permission_cabinet_remove_document, permission_cabinet_view,
                 permission_events_view
             )
         )
@@ -147,23 +149,26 @@ class CabinetsApp(MayanAppConfig):
         )
 
         SourceColumn(
-            func=lambda context: widget_document_cabinets(
-                document=context['object'], user=context['request'].user
-            ), label=_('Cabinets'), order=1, source=Document
+            label=_('Cabinets'), order=1, source=Document,
+            widget=DocumentCabinetWidget
         )
-
-        #SourceColumn(
-        #    func=lambda context: widget_document_cabinets(
-        #        document=context['object'].document,
-        #        user=context['request'].user
-        #    ), label=_('Cabinets'), order=1, source=DocumentFilePageResult
-        #)
-        #SourceColumn(
-        #    func=lambda context: widget_document_cabinets(
-        #        document=context['object'].document,
-        #        user=context['request'].user
-        #    ), label=_('Cabinets'), order=1, source=DocumentVersionPageResult
-        #)
+        SourceColumn(
+            attribute='document', label=_('Cabinets'), order=1,
+            source=DocumentFileSearchResult, widget=DocumentCabinetWidget
+        )
+        SourceColumn(
+            attribute='document_file__document', label=_('Cabinets'), order=1,
+            source=DocumentFilePageSearchResult, widget=DocumentCabinetWidget
+        )
+        SourceColumn(
+            attribute='document', label=_('Cabinets'), order=1,
+            source=DocumentVersionSearchResult, widget=DocumentCabinetWidget
+        )
+        SourceColumn(
+            attribute='document_version__document', label=_('Cabinets'),
+            order=1, source=DocumentVersionPageSearchResult,
+            widget=DocumentCabinetWidget
+        )
 
         menu_facet.bind_links(
             links=(link_document_cabinet_list,), sources=(Document,)
@@ -176,12 +181,11 @@ class CabinetsApp(MayanAppConfig):
         )
         menu_list_facet.bind_links(
             links=(
-                link_cabinet_view, link_custom_acl_list,
-                link_events_for_object,
-                link_object_event_types_user_subcriptions_list,
+                link_cabinet_view, link_custom_acl_list
             ),
-            sources=(Cabinet, CabinetSearchResult)
+            sources=(Cabinet,)
         )
+        menu_list_facet.add_proxy_inclusions(source=CabinetSearchResult)
 
         menu_main.bind_links(links=(menu_cabinets,), position=98)
 
@@ -199,8 +203,9 @@ class CabinetsApp(MayanAppConfig):
         menu_object.bind_links(
             links=(
                 link_cabinet_delete, link_cabinet_edit, link_cabinet_child_add
-            ), sources=(Cabinet, CabinetSearchResult)
+            ), sources=(Cabinet,)
         )
+        menu_object.add_proxy_inclusions(source=CabinetSearchResult)
         menu_object.unbind_links(
             links=(
                 link_cabinet_delete, link_cabinet_edit, link_cabinet_child_add

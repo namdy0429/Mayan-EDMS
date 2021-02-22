@@ -7,12 +7,12 @@ from mayan.apps.views.generics import (
 )
 
 from .icons import icon_download_file_list
-from .mixins import ViewMixinRelatedObjectPermission
 from .models import DownloadFile
+from .view_mixins import RelatedObjectPermissionViewMixin
 
 
 class DownloadFileDeleteView(
-    ViewMixinRelatedObjectPermission, MultipleObjectDeleteView
+    RelatedObjectPermissionViewMixin, MultipleObjectDeleteView
 ):
     model = DownloadFile
     pk_url_kwarg = 'download_file_id'
@@ -20,22 +20,29 @@ class DownloadFileDeleteView(
         viewname='storage:download_file_list'
     )
 
+    def get_instance_extra_data(self):
+        return {
+            '_event_actor': self.request.user,
+        }
+
 
 class DownloadFileDownloadViewView(
-    ViewMixinRelatedObjectPermission, SingleObjectDownloadView
+    RelatedObjectPermissionViewMixin, SingleObjectDownloadView
 ):
     model = DownloadFile
     pk_url_kwarg = 'download_file_id'
 
     def get_download_file_object(self):
-        return self.object.open(mode='rb')
+        instance = self.get_object()
+        instance._event_actor = self.request.user
+        return instance.get_download_file_object()
 
     def get_download_filename(self):
-        return force_text(self.object)
+        return force_text(s=self.object)
 
 
 class DownloadFileListView(
-    ViewMixinRelatedObjectPermission, SingleObjectListView
+    RelatedObjectPermissionViewMixin, SingleObjectListView
 ):
     model = DownloadFile
 

@@ -28,6 +28,9 @@ class APIRoleListView(generics.ListCreateAPIView):
     mayan_view_permissions = {'POST': (permission_role_create,)}
     queryset = Role.objects.all()
 
+    def get_instance_extra_data(self):
+        return {'_event_actor': self.request.user}
+
     def get_serializer(self, *args, **kwargs):
         if not self.request:
             return None
@@ -48,6 +51,7 @@ class APIRoleView(generics.RetrieveUpdateDestroyAPIView):
     patch: Edit the selected role.
     put: Edit the selected role.
     """
+    lookup_url_kwarg = 'role_id'
     mayan_object_permissions = {
         'GET': (permission_role_view,),
         'PUT': (permission_role_edit,),
@@ -55,6 +59,9 @@ class APIRoleView(generics.RetrieveUpdateDestroyAPIView):
         'DELETE': (permission_role_delete,)
     }
     queryset = Role.objects.all()
+
+    def get_instance_extra_data(self):
+        return {'_event_actor': self.request.user}
 
     def get_serializer(self, *args, **kwargs):
         if not self.request:

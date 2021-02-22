@@ -8,7 +8,7 @@ from mayan.apps.views.generics import (
     SingleObjectCreateView, SingleObjectDeleteView, SingleObjectEditView,
     SingleObjectListView
 )
-from mayan.apps.views.mixins import ExternalObjectMixin
+from mayan.apps.views.mixins import ExternalObjectViewMixin
 
 from ..forms.document_type_forms import (
     DocumentTypeFilenameGeneratorForm, DocumentTypeFilenameForm_create
@@ -19,7 +19,7 @@ from ..icons import (
 from ..links.document_type_links import (
     link_document_type_create, link_document_type_filename_create
 )
-from ..models import DocumentType, DocumentTypeFilename
+from ..models.document_type_models import DocumentType, DocumentTypeFilename
 from ..permissions import (
     permission_document_type_create, permission_document_type_delete,
     permission_document_type_edit, permission_document_type_view
@@ -36,7 +36,7 @@ __all__ = (
 logger = logging.getLogger(name=__name__)
 
 
-class DocumentTypeDocumentListView(ExternalObjectMixin, DocumentListView):
+class DocumentTypeDocumentListView(ExternalObjectViewMixin, DocumentListView):
     external_object_class = DocumentType
     external_object_permission = permission_document_type_view
     external_object_pk_url_kwarg = 'document_type_id'
@@ -125,9 +125,9 @@ class DocumentTypeEditView(SingleObjectEditView):
             'title': _('Edit document type: %s') % self.object,
         }
 
-    def get_save_extra_data(self):
+    def get_instance_extra_data(self):
         return {
-            '_user': self.request.user,
+            '_event_actor': self.request.user,
         }
 
 
@@ -149,13 +149,13 @@ class DocumentTypeDeletionPoliciesEditView(SingleObjectEditView):
             ) % self.object,
         }
 
-    def get_save_extra_data(self):
+    def get_instance_extra_data(self):
         return {
-            '_user': self.request.user,
+            '_event_actor': self.request.user,
         }
 
 
-class DocumentTypeFilenameCreateView(ExternalObjectMixin, SingleObjectCreateView):
+class DocumentTypeFilenameCreateView(ExternalObjectViewMixin, SingleObjectCreateView):
     external_object_class = DocumentType
     external_object_permission = permission_document_type_edit
     external_object_pk_url_kwarg = 'document_type_id'
@@ -229,7 +229,7 @@ class DocumentTypeFilenameEditView(SingleObjectEditView):
         )
 
 
-class DocumentTypeFilenameListView(ExternalObjectMixin, SingleObjectListView):
+class DocumentTypeFilenameListView(ExternalObjectViewMixin, SingleObjectListView):
     external_object_class = DocumentType
     external_object_permission = permission_document_type_view
     external_object_pk_url_kwarg = 'document_type_id'
@@ -281,7 +281,7 @@ class DocumentTypeFileGeneratorEditView(SingleObjectEditView):
             ) % self.object,
         }
 
-    def get_save_extra_data(self):
+    def get_instance_extra_data(self):
         return {
-            '_user': self.request.user,
+            '_event_actor': self.request.user,
         }

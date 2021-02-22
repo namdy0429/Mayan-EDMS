@@ -11,11 +11,7 @@ from mayan.apps.mayan_statistics.classes import (
 
 from .permissions import permission_document_view
 
-MONTH_NAMES = [
-    _('January'), _('February'), _('March'), _('April'), _('May'),
-    _('June'), _('July'), _('August'), _('September'), _('October'),
-    _('November'), _('December')
-]
+from .literals import MONTH_NAMES
 
 
 def get_month_name(month_number):
@@ -25,7 +21,7 @@ def get_month_name(month_number):
 def new_documents_per_month():
     Document = apps.get_model(app_label='documents', model_name='Document')
 
-    qss = qsstats.QuerySetStats(Document.objects.all(), 'datetime_created')
+    qss = qsstats.QuerySetStats(Document.valid.all(), 'datetime_created')
 
     now = timezone.now().date()
     start = timezone.datetime(year=now.year, month=1, day=1).date()
@@ -46,7 +42,7 @@ def new_document_pages_per_month():
     )
 
     qss = qsstats.QuerySetStats(
-        DocumentFilePage.objects.all(), 'document_file__document__datetime_created'
+        DocumentFilePage.valid.all(), 'document_file__document__datetime_created'
     )
 
     now = timezone.now().date()
@@ -68,7 +64,7 @@ def new_documents_this_month(user=None):
     )
     Document = apps.get_model(app_label='documents', model_name='Document')
 
-    queryset = Document.objects.all()
+    queryset = Document.valid.all()
 
     if user:
         queryset = AccessControlList.objects.restrict_queryset(
@@ -86,7 +82,7 @@ def new_document_files_per_month():
     )
 
     qss = qsstats.QuerySetStats(
-        DocumentFile.objects.all(), 'document__datetime_created'
+        DocumentFile.valid.all(), 'document__datetime_created'
     )
 
     now = timezone.now().date()
@@ -110,7 +106,7 @@ def new_document_pages_this_month(user=None):
         app_label='documents', model_name='DocumentFilePage'
     )
 
-    queryset = DocumentFilePage.objects.all()
+    queryset = DocumentFilePage.valid.all()
 
     if user:
         queryset = AccessControlList.objects.restrict_queryset(
@@ -127,7 +123,7 @@ def new_document_pages_this_month(user=None):
 def total_document_per_month():
     Document = apps.get_model(app_label='documents', model_name='Document')
 
-    qss = qsstats.QuerySetStats(Document.objects.all(), 'datetime_created')
+    qss = qsstats.QuerySetStats(Document.valid.all(), 'datetime_created')
     now = timezone.now()
 
     result = []
@@ -163,7 +159,7 @@ def total_document_file_per_month():
     )
 
     qss = qsstats.QuerySetStats(
-        DocumentFile.objects.all(), 'document__datetime_created'
+        DocumentFile.valid.all(), 'document__datetime_created'
     )
     now = timezone.now()
 
@@ -200,7 +196,7 @@ def total_document_page_per_month():
     )
 
     qss = qsstats.QuerySetStats(
-        DocumentFilePage.objects.all(), 'document_file__document__datetime_created'
+        DocumentFilePage.valid.all(), 'document_file__document__datetime_created'
     )
     now = timezone.now()
 

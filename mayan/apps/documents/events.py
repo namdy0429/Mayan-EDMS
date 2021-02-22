@@ -70,6 +70,9 @@ event_document_version_deleted = namespace.add_event_type(
 event_document_version_edited = namespace.add_event_type(
     label=_('Document version edited'), name='document_version_edited'
 )
+event_document_version_exported = namespace.add_event_type(
+    label=_('Document version exported'), name='document_version_exported'
+)
 
 # Document version page
 
@@ -91,6 +94,12 @@ event_document_version_page_edited = namespace.add_event_type(
 event_document_trashed = namespace.add_event_type(
     label=_('Document trashed'), name='document_trashed'
 )
+event_trashed_document_deleted = namespace.add_event_type(
+    label=_('Trashed document deleted'), name='trashed_document_deleted'
+)
+event_trashed_document_restored = namespace.add_event_type(
+    label=_('Trashed document restored'), name='trashed_document_restored'
+)
 
 # Historic events
 
@@ -98,7 +107,7 @@ event_document_download = namespace.add_event_type(
     label=_('Document downloaded'), name='document_download'
 )
 event_document_file_pre_save = namespace.add_event_type(
-    label=_('Document file created'), name='document_file_pre_save'
+    label=_('Document file created (historic)'), name='document_file_pre_save'
 )
 event_document_version_revert = namespace.add_event_type(
     label=_('Document version revert'), name='document_version_revert'

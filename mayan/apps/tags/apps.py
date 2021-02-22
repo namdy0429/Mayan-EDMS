@@ -16,17 +16,14 @@ from mayan.apps.common.menus import (
     menu_secondary
 )
 from mayan.apps.events.classes import EventModelRegistry, ModelEventType
-from mayan.apps.events.links import (
-    link_events_for_object, link_object_event_types_user_subcriptions_list,
-)
 from mayan.apps.events.permissions import permission_events_view
 from mayan.apps.navigation.classes import SourceColumn
 
 from .events import (
-    event_tag_attach, event_tag_edited, event_tag_removed
+    event_tag_attached, event_tag_edited, event_tag_removed
 )
 from .handlers import handler_index_document, handler_tag_pre_delete
-from .html_widgets import widget_document_tags
+from .html_widgets import DocumentTagWidget
 from .links import (
     link_document_tag_list, link_document_multiple_tag_multiple_attach,
     link_document_multiple_tag_multiple_remove,
@@ -53,18 +50,22 @@ class TagsApp(MayanAppConfig):
 
     def ready(self):
         super().ready()
-        from .wizard_steps import WizardStepTags  # NOQA
-
         Document = apps.get_model(
             app_label='documents', model_name='Document'
         )
 
-        #DocumentFilePageResult = apps.get_model(
-        #    app_label='documents', model_name='DocumentFilePageResult'
-        #)
-        #DocumentVersionPageResult = apps.get_model(
-        #    app_label='documents', model_name='DocumentVersionPageResult'
-        #)
+        DocumentFileSearchResult = apps.get_model(
+            app_label='documents', model_name='DocumentFileSearchResult'
+        )
+        DocumentFilePageSearchResult = apps.get_model(
+            app_label='documents', model_name='DocumentFilePageSearchResult'
+        )
+        DocumentVersionSearchResult = apps.get_model(
+            app_label='documents', model_name='DocumentVersionSearchResult'
+        )
+        DocumentVersionPageSearchResult = apps.get_model(
+            app_label='documents', model_name='DocumentVersionPageSearchResult'
+        )
 
         DocumentTag = self.get_model(model_name='DocumentTag')
         Tag = self.get_model(model_name='Tag')
@@ -83,7 +84,7 @@ class TagsApp(MayanAppConfig):
 
         ModelEventType.register(
             model=Tag, event_types=(
-                event_tag_attach, event_tag_edited, event_tag_removed
+                event_tag_attached, event_tag_edited, event_tag_removed
             )
         )
 
@@ -118,24 +119,26 @@ class TagsApp(MayanAppConfig):
         )
 
         SourceColumn(
-            func=lambda context: widget_document_tags(
-                document=context['object'], user=context['request'].user
-            ), label=_('Tags'), source=Document
+            label=_('Tags'), source=Document, widget=DocumentTagWidget
         )
 
-        #SourceColumn(
-        #    func=lambda context: widget_document_tags(
-        #        document=context['object'].document,
-        #        user=context['request'].user
-        #    ), label=_('Tags'), source=DocumentVersionPageResult
-        #)
+        SourceColumn(
+            attribute='document', label=_('Tags'),
+            source=DocumentFileSearchResult, widget=DocumentTagWidget
+        )
+        SourceColumn(
+            attribute='document_file__document', label=_('Tags'),
+            source=DocumentFilePageSearchResult, widget=DocumentTagWidget
+        )
 
-        #SourceColumn(
-        #    func=lambda context: widget_document_tags(
-        #        document=context['object'].document,
-        #        user=context['request'].user
-        #    ), label=_('Tags'), source=DocumentFilePageResult
-        #)
+        SourceColumn(
+            attribute='document', label=_('Tags'),
+            source=DocumentVersionSearchResult, widget=DocumentTagWidget
+        )
+        SourceColumn(
+            attribute='document_version__document', label=_('Tags'),
+            source=DocumentVersionPageSearchResult, widget=DocumentTagWidget
+        )
 
         SourceColumn(
             attribute='label', is_identifier=True, is_sortable=True,
@@ -157,9 +160,7 @@ class TagsApp(MayanAppConfig):
 
         menu_list_facet.bind_links(
             links=(
-                link_acl_list, link_events_for_object,
-                link_object_event_types_user_subcriptions_list,
-                link_tag_document_list,
+                link_acl_list, link_tag_document_list,
             ), sources=(Tag,)
         )
 

@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils.timezone import now
 from django.utils.translation import ugettext, ugettext_lazy as _
 
-from mayan.apps.common.mixins import ModelInstanceExtraDataAPIViewMixin
+from mayan.apps.common.model_mixins import ExtraDataModelMixin
 from mayan.apps.common.signals import signal_mayan_pre_save
 from mayan.apps.events.classes import EventManagerSave
 from mayan.apps.events.decorators import method_event
@@ -18,7 +18,8 @@ from mayan.apps.storage.exceptions import NoMIMETypeMatch
 
 from ..events import (
     event_document_created, event_document_edited,
-    event_document_trashed, event_document_type_changed
+    event_document_trashed, event_document_type_changed,
+    event_trashed_document_deleted
 )
 from ..literals import (
     DEFAULT_LANGUAGE, DOCUMENT_FILE_ACTION_PAGES_APPEND,
@@ -31,14 +32,14 @@ from ..managers import (
 from ..signals import signal_post_document_type_change
 
 from .document_type_models import DocumentType
-from .mixins import ModelMixinHooks
+from .mixins import HooksModelMixin
 
-__all__ = ('Document', 'DocumentSearchResult', 'TrashedDocument')
+__all__ = ('Document', 'DocumentSearchResult',)
 logger = logging.getLogger(name=__name__)
 
 
 class Document(
-    ModelInstanceExtraDataAPIViewMixin, ModelMixinHooks, models.Model
+    ExtraDataModelMixin, HooksModelMixin, models.Model
 ):
     """
     Defines a single document with it's fields and properties
@@ -129,7 +130,7 @@ class Document(
         verbose_name_plural = _('Documents')
 
     def __str__(self):
-        return self.label or ugettext('Document stub, id: %d') % self.pk
+        return self.get_label()
 
     def add_as_recent_document_for_user(self, user):
         RecentlyAccessedDocument = apps.get_model(
@@ -141,7 +142,7 @@ class Document(
 
     def delete(self, *args, **kwargs):
         to_trash = kwargs.pop('to_trash', True)
-        _user = kwargs.pop('_user', None)
+        user = kwargs.pop('_user', self.__dict__.pop('_event_actor', None))
 
         if not self.in_trash and to_trash:
             self.in_trash = True
@@ -149,13 +150,18 @@ class Document(
             with transaction.atomic():
                 self._event_ignore = True
                 self.save()
-                event_document_trashed.commit(actor=_user, target=self)
+
+            event_document_trashed.commit(actor=user, target=self)
         else:
             with transaction.atomic():
                 for document_file in self.files.all():
                     document_file.delete()
 
-                return super().delete(*args, **kwargs)
+                super().delete(*args, **kwargs)
+
+            event_trashed_document_deleted.commit(
+                actor=user, target=self.document_type
+            )
 
     def document_type_change(self, document_type, force=False, _user=None):
         has_changed = self.document_type != document_type
@@ -195,14 +201,6 @@ class Document(
             app_label='documents', model_name='DocumentFile'
         )
 
-        #DocumentFile.execute_pre_create_hooks(
-        #    kwargs={
-        #        'document': self,
-        #        'file_object': file_object,
-        #        'user': _user
-        #    }
-        #)
-
         if expand:
             try:
                 compressed_file = Archive.open(file_object=file_object)
@@ -227,14 +225,17 @@ class Document(
                 return
             except NoMIMETypeMatch:
                 logger.debug(msg='No expanding; Exception: NoMIMETypeMatch')
-                # Fallthrough to same code path as expand=False to avoid
+                # Fall through to same code path as expand=False to avoid
                 # duplicating code.
 
-        #transaction.atomic
+        DocumentVersion = apps.get_model(
+            app_label='documents', model_name='DocumentVersion'
+        )
+
         try:
             document_file = DocumentFile(
                 document=self, comment=comment, file=File(file=file_object),
-                filename=filename or file_object.name
+                filename=filename or Path(file_object.name).name
             )
             document_file._event_actor = _user
             document_file.save()
@@ -252,11 +253,19 @@ class Document(
             )
 
             if action == DOCUMENT_FILE_ACTION_PAGES_NEW:
-                document_version = self.versions.create(comment=comment)
+                document_version = DocumentVersion(
+                    document=self, comment=comment
+                )
+                document_version._event_actor = _user
+                document_version.save()
+
+                annotated_content_object_list = DocumentVersion.annotate_content_object_list(
+                    content_object_list=document_file.pages.all()
+                )
+
                 document_version.pages_remap(
-                    annotated_content_object_list=DocumentVersion.annotate_content_object_list(
-                        content_object_list=document_file.pages.all()
-                    )
+                    annotated_content_object_list=annotated_content_object_list,
+                    _user=_user
                 )
             elif action == DOCUMENT_FILE_ACTION_PAGES_APPEND:
                 annotated_content_object_list = []
@@ -273,9 +282,15 @@ class Document(
                     )
                 )
 
-                document_version = self.versions.create(comment=comment)
+                document_version = DocumentVersion(
+                    document=self, comment=comment
+                )
+                document_version._event_actor = _user
+                document_version.save()
+
                 document_version.pages_remap(
-                    annotated_content_object_list=annotated_content_object_list
+                    annotated_content_object_list=annotated_content_object_list,
+                    _user=_user
                 )
             elif action == DOCUMENT_FILE_ACTION_PAGES_KEEP:
                 return document_file
@@ -294,6 +309,11 @@ class Document(
         if version_active:
             return version_active.get_api_image_url(*args, **kwargs)
 
+    def get_label(self):
+        return self.label or ugettext('Document stub, id: %d') % self.pk
+
+    get_label.short_description = _('Label')
+
     @property
     def is_in_trash(self):
         return self.in_trash
@@ -301,10 +321,6 @@ class Document(
     def natural_key(self):
         return (self.uuid,)
     natural_key.dependencies = ['documents.DocumentType']
-
-    @property
-    def page_count(self):
-        return self.pages.count()
 
     @property
     def pages(self):
@@ -323,7 +339,6 @@ class Document(
         created={
             'event': event_document_created,
             'action_object': 'document_type',
-            'keep_attributes': '_event_actor',
             'target': 'self'
         },
         edited={
@@ -332,7 +347,7 @@ class Document(
         }
     )
     def save(self, *args, **kwargs):
-        user = kwargs.pop('_user', self.__dict__.pop('_event_actor', None))
+        user = self.__dict__.pop('_event_actor', None)
         new_document = not self.pk
 
         signal_mayan_pre_save.send(
@@ -364,14 +379,3 @@ class RecentlyCreatedDocument(Document):
 
     class Meta:
         proxy = True
-
-
-class TrashedDocument(Document):
-    objects = TrashCanManager()
-
-    class Meta:
-        proxy = True
-
-    def restore(self):
-        self.in_trash = False
-        self.save()

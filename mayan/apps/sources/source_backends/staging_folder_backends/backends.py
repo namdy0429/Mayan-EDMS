@@ -259,14 +259,14 @@ class SourceBackendStagingFolder(
 
         link_staging_file_delete = Link(
             args=('source.pk', 'object.encoded_filename',), keep_query=True,
-            icon_class=icon_staging_file_delete,
+            icon=icon_staging_file_delete,
             permissions=(permission_sources_view,),
-            tags='dangerous', text=_('Delete'), view='sources:staging_file_delete',
+            tags='dangerous', text=_('Delete'),
+            view='sources:staging_file_delete',
         )
         menu_object.bind_links(
             links=(link_staging_file_delete,), sources=(StagingFile,)
         )
-        html_widget = StagingFileThumbnailWidget()
 
         SourceColumn(
             func=lambda context: context['object'].get_date_time_created(),
@@ -276,9 +276,10 @@ class SourceBackendStagingFolder(
         SourceColumn(
             source=StagingFile,
             label=_('Thumbnail'),
-            func=lambda context: html_widget.render(
-                instance=context['object'],
-            )
+            #func=lambda context: html_widget.render(
+            #    instance=context['object'],
+            #)
+            widget=StagingFileThumbnailWidget
         )
 
         urlpatterns += (
