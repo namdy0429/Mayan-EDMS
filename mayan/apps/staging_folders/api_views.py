@@ -11,21 +11,18 @@ from mayan.apps.documents.models.document_models import DocumentType
 from mayan.apps.documents.permissions import permission_document_create
 from mayan.apps.permissions.classes import Permission
 from mayan.apps.rest_api import generics
+from mayan.apps.sources.literals import STORAGE_NAME_SOURCE_CACHE_FOLDER
+from mayan.apps.sources.models import Source
+from mayan.apps.sources.permissions import permission_sources_view
+from mayan.apps.sources.tasks import task_process_document_upload
 from mayan.apps.storage.classes import DefinedStorage
 from mayan.apps.storage.models import SharedUploadedFile
 
-from ...literals import (
-    STAGING_FILE_IMAGE_TASK_TIMEOUT, STORAGE_NAME_SOURCE_CACHE_FOLDER
-)
-from ...models import Source
-from ...permissions import permission_sources_view
-from ...tasks import (
-    task_generate_staging_file_image, task_process_document_upload
-)
-
+from .literals import STAGING_FILE_IMAGE_TASK_TIMEOUT
 from .serializers import (
     StagingFolderFileSerializer, StagingFolderFileUploadSerializer
 )
+from .tasks import task_generate_staging_file_image
 
 
 class APIStagingSourceFileView(generics.RetrieveDestroyAPIView):

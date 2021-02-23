@@ -19,25 +19,21 @@ from mayan.apps.common.menus import menu_object
 from mayan.apps.converter.classes import ConverterBase
 from mayan.apps.converter.transformations import TransformationResize
 from mayan.apps.navigation.classes import Link, SourceColumn
-from mayan.apps.storage.classes import DefinedStorage
-from mayan.apps.storage.models import SharedUploadedFile
-
-from ...classes import SourceBackend
-from ...forms import StagingUploadForm
-from ...literals import STORAGE_NAME_SOURCE_CACHE_FOLDER
-from ...permissions import permission_sources_view
-
-from ..mixins import (
+from mayan.apps.sources.classes import SourceBackend
+from mayan.apps.sources.literals import STORAGE_NAME_SOURCE_CACHE_FOLDER
+from mayan.apps.sources.permissions import permission_sources_view
+from mayan.apps.sources.source_backends.mixins import (
     SourceBackendCompressedMixin, SourceBackendInteractiveMixin,
     SourceBaseMixin
 )
+from mayan.apps.storage.classes import DefinedStorage
+from mayan.apps.storage.models import SharedUploadedFile
 
 from .api_views import (
     APIStagingSourceFileView, APIStagingSourceFileImageView,
     APIStagingSourceFileUploadView
 )
-from .views import StagingFileDeleteView
-from .widgets import StagingFileThumbnailWidget
+from .forms import StagingUploadForm
 
 __all__ = ('SourceBackendStagingFolder',)
 logger = logging.getLogger(name=__name__)
@@ -248,66 +244,6 @@ class SourceBackendStagingFolder(
     icon_staging_folder_file = Icon(driver_name='fontawesome', symbol='file')
     label = _('Staging folder')
     upload_form_class = StagingUploadForm
-
-    @classmethod
-    def intialize(cls):
-        from ...urls import urlpatterns
-
-        from mayan.apps.rest_api.urls import api_version_urls
-
-        icon_staging_file_delete = Icon(driver_name='fontawesome', symbol='times')
-
-        link_staging_file_delete = Link(
-            args=('source.pk', 'object.encoded_filename',), keep_query=True,
-            icon=icon_staging_file_delete,
-            permissions=(permission_sources_view,),
-            tags='dangerous', text=_('Delete'),
-            view='sources:staging_file_delete',
-        )
-        menu_object.bind_links(
-            links=(link_staging_file_delete,), sources=(StagingFile,)
-        )
-
-        SourceColumn(
-            func=lambda context: context['object'].get_date_time_created(),
-            label=_('Created'), source=StagingFile,
-        )
-
-        SourceColumn(
-            source=StagingFile,
-            label=_('Thumbnail'),
-            #func=lambda context: html_widget.render(
-            #    instance=context['object'],
-            #)
-            widget=StagingFileThumbnailWidget
-        )
-
-        urlpatterns += (
-            url(
-                regex=r'^staging_folders/(?P<staging_folder_id>\d+)/files/(?P<encoded_filename>.+)/delete/$',
-                name='staging_file_delete', view=StagingFileDeleteView.as_view()
-            ),
-        )
-
-        api_version_urls.extend(
-            [
-                url(
-                    regex=r'^staging_folders_files/(?P<staging_folder_pk>[0-9]+)/(?P<encoded_filename>.+)/image/$',
-                    name='stagingfolderfile-image',
-                    view=APIStagingSourceFileImageView.as_view()
-                ),
-                url(
-                    regex=r'^staging_folders_files/(?P<staging_folder_pk>[0-9]+)/(?P<encoded_filename>.+)/upload/$',
-                    name='stagingfolderfile-upload',
-                    view=APIStagingSourceFileUploadView.as_view()
-                ),
-                url(
-                    regex=r'^staging_folders_files/(?P<staging_folder_pk>[0-9]+)/(?P<encoded_filename>.+)/$',
-                    name='stagingfolderfile-detail',
-                    view=APIStagingSourceFileView.as_view()
-                )
-            ]
-        )
 
     #TODO: Implement post upload action
     def clean_up_upload_file(self, upload_file_object):

@@ -96,15 +96,6 @@ class DocumentCreateWizardStep(AppsModuleLoaderMixin):
         pass
 
 
-class PseudoFile(File):
-    def __init__(self, file, name):
-        self.name = name
-        self.file = file
-        self.file.seek(0, os.SEEK_END)
-        self.size = self.file.tell()
-        self.file.seek(0)
-
-
 class SourceBackendMetaclass(type):
     _registry = {}
 

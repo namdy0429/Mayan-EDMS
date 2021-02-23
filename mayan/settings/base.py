@@ -122,6 +122,7 @@ INSTALLED_APPS = (
     'mayan.apps.ocr',
     'mayan.apps.redactions',
     'mayan.apps.sources',
+    'mayan.apps.staging_folders',
     'mayan.apps.tags',
     'mayan.apps.web_links',
     # Placed after rest_api to allow template overriding

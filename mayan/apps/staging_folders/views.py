@@ -1,10 +1,9 @@
 from django.utils.translation import ugettext_lazy as _
 
+from mayan.apps.sources.models import Source
+from mayan.apps.sources.permissions import permission_sources_view
 from mayan.apps.views.generics import SingleObjectDeleteView
 from mayan.apps.views.mixins import ExternalObjectViewMixin
-
-from ...models import Source
-from ...permissions import permission_sources_view
 
 __all__ = ('StagingFileDeleteView',)
 

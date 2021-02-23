@@ -15,10 +15,6 @@ queue_sources_fast = CeleryQueue(
     worker=worker_fast
 )
 
-queue_sources_fast.add_task_type(
-    label=_('Generate staging file image'),
-    dotted_path='mayan.apps.sources.tasks.task_generate_staging_file_image'
-)
 queue_sources_periodic.add_task_type(
     label=_('Check interval source'),
     dotted_path='mayan.apps.sources.tasks.task_source_process_document'

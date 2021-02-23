@@ -4,8 +4,8 @@ from mayan.apps.smart_settings.classes import SettingNamespace
 
 from .literals import (
     DEFAULT_SOURCES_SCANIMAGE_PATH,
-    DEFAULT_SOURCES_STAGING_FILE_CACHE_STORAGE_BACKEND,
-    DEFAULT_SOURCES_STAGING_FILE_CACHE_STORAGE_BACKEND_ARGUMENTS
+    DEFAULT_SOURCES_FILE_CACHE_STORAGE_BACKEND,
+    DEFAULT_SOURCES_FILE_CACHE_STORAGE_BACKEND_ARGUMENTS
 )
 from .setting_migrations import SourcesSettingMigration
 
@@ -21,15 +21,15 @@ setting_scanimage_path = namespace.add_setting(
     ), is_path=True
 )
 setting_source_cache_storage = namespace.add_setting(
-    global_name='SOURCES_SOURCE_CACHE_STORAGE_BACKEND',
-    default=DEFAULT_SOURCES_STAGING_FILE_CACHE_STORAGE_BACKEND, help_text=_(
+    global_name='SOURCES_FILE_CACHE_STORAGE_BACKEND',
+    default=DEFAULT_SOURCES_FILE_CACHE_STORAGE_BACKEND, help_text=_(
         'Path to the Storage subclass used to store cached '
         'source image files.'
     )
 )
 setting_source_cache_storage_arguments = namespace.add_setting(
-    global_name='SOURCES_SOURCE_CACHE_STORAGE_BACKEND_ARGUMENTS',
-    default=DEFAULT_SOURCES_STAGING_FILE_CACHE_STORAGE_BACKEND_ARGUMENTS,
+    global_name='SOURCES_FILE_CACHE_STORAGE_BACKEND_ARGUMENTS',
+    default=DEFAULT_SOURCES_FILE_CACHE_STORAGE_BACKEND_ARGUMENTS,
     help_text=_(
         'Arguments to pass to the SOURCES_SOURCE_CACHE_STORAGE_BACKEND.'
     )

@@ -48,21 +48,6 @@ def task_source_process_document(source_id, dry_run=False):
             lock.release()
 
 
-@app.task()
-def task_generate_staging_file_image(
-    staging_folder_pk, encoded_filename, *args, **kwargs
-):
-    Source = apps.get_model(
-        app_label='sources', model_name='Source'
-    )
-    staging_folder = Source.objects.get(pk=staging_folder_pk)
-    staging_file = staging_folder.get_backend_instance().get_file(
-        encoded_filename=encoded_filename
-    )
-
-    return staging_file.generate_image(*args, **kwargs)
-
-
 @app.task(
     bind=True, default_retry_delay=DEFAULT_SOURCES_TASK_RETRY_DELAY,
     ignore_result=True
